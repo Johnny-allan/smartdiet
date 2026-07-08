@@ -1,0 +1,1 @@
+"""SmartDiet backend application package."""

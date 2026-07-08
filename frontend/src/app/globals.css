@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #F3F4F6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #F3F4F6;
+  color: #3F4652;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid #F97316;
+  outline-offset: 2px;
+}
+
+.smart-logo-mark {
+  position: relative;
+  display: grid;
+  height: 40px;
+  width: 40px;
+  place-items: center;
+  border-radius: 8px;
+  background: #168A5A;
+  color: #FFFFFF;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 12px 34px rgba(22, 138, 90, 0.24);
+}
+
+.smart-logo-mark::after {
+  position: absolute;
+  right: 5px;
+  top: 6px;
+  height: 13px;
+  width: 8px;
+  content: "";
+  border-radius: 8px 8px 8px 0;
+  background: #F97316;
+  transform: rotate(38deg);
+}
+
+.smart-scrollbar {
+  scrollbar-color: #F97316 transparent;
+  scrollbar-width: thin;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

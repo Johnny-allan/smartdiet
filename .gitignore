@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+env/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+tsconfig.tsbuildinfo
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Playwright and QA artifacts
+playwright-report/
+test-results/
+frontend/playwright-report/
+frontend/test-results/
+frontend/tests/ui/test-results/
+
+# Logs
+*.log
+*.out.log
+*.err.log
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local database/files
+*.sqlite
+*.sqlite3

@@ -4184,15 +4184,18 @@ export function ReportsWorkspace() {
       ["Genero", selectedPatient?.gender || "Nao informado"],
       ["Restricoes", selectedAnamnesis?.restrictions || "Sem restricoes registradas."],
       ["Rotina alimentar", selectedAnamnesis?.routine || "Sem rotina registrada."],
-      ["Total estruturado", formatNutrient(mealPlanTotalKcal, " kcal")],
+      ["Meta de aderencia ao cardapio", adherenceGoal?.target ? `${adherenceGoal.target}${adherenceGoal.unit || ""}` : "Sem meta cadastrada"],
       ["Aderencia media registrada", averageDiaryAdherence !== null ? `${averageDiaryAdherence}%` : "Sem registro no diario"],
       ["Ultimo registro de aderencia", latestDiary ? `${latestDiary.date} - ${latestDiary.meal}: ${latestDiary.adherence || "Nao informado"}` : "Sem registro no diario"],
+      ["Registros no diario alimentar", selectedDiary.length ? `${selectedDiary.length} registro(s)` : "Sem registros"],
+      ["Total energetico estruturado", formatNutrient(mealPlanTotalKcal, " kcal")],
+      ["Refeicoes no cardapio", `${requiredMeals.filter((meal) => selectedPlan?.meals?.[meal] || mealPlanItems.some((item) => item.meal === meal)).length} de ${requiredMeals.length}`],
     ];
     return `
       <h1>Resumo alimentar</h1>
       <p class="muted">Plano alimentar estruturado para o paciente revisar horarios, refeicoes e itens prescritos.</p>
       <section>
-        <h2>Paciente</h2>
+        <h2>Dados alimentares do paciente</h2>
         <table>${patientRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
       </section>
       <section>

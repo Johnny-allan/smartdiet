@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.assessment.repository import AssessmentRepository
-from app.clinical.repository import AnamnesisRepository
+from app.clinical.models import PatientGoal
+from app.clinical.repository import AnamnesisRepository, PatientGoalRepository
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError
 from app.diary.repository import DiaryRepository
@@ -39,6 +40,8 @@ SECTION_TITLES = {
     "Bioimpedancia",
     "Plano alimentar",
     "Diario alimentar",
+    "Dados alimentares do paciente",
+    "Metas alimentares",
     "Objetivo",
     "Restricoes e preferencias",
 }
@@ -150,6 +153,26 @@ def _wrap_optional(value: object | None, width: int = 90) -> list[str]:
     return wrap(str(value), width=width)
 
 
+def _extract_adherence(notes: str | None) -> str | None:
+    if not notes:
+        return None
+    for line in notes.splitlines():
+        normalized = line.lower()
+        if "aderencia" in normalized or "adherence" in normalized:
+            return line.split(":", 1)[-1].strip() if ":" in line else line.strip()
+    return None
+
+
+def _food_related_goals(goals: list[PatientGoal]) -> list[PatientGoal]:
+    keywords = ("aderencia", "cardapio", "dieta", "aliment", "agua", "proteina", "caloria", "refeic")
+    matched = [
+        goal
+        for goal in goals
+        if any(keyword in f"{goal.focus} {goal.metric} {goal.notes or ''}".lower() for keyword in keywords)
+    ]
+    return (matched or goals)[:4]
+
+
 def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
     patient = PatientRepository(db).get(patient_id)
     if patient is None:
@@ -238,26 +261,47 @@ def patient_meal_plan_pdf(patient_id: int, db: Session = Depends(get_db)) -> Res
         raise NotFoundError("Meal plan not found")
     plan = plans[0]
     anamnesis = AnamnesisRepository(db).get_by_patient(patient_id)
+    diary_entries = DiaryRepository(db).list_by_patient(patient_id)
+    goals = PatientGoalRepository(db).list_by_patient(patient_id)
+    adherence_values = [value for value in (_extract_adherence(item.notes) for item in diary_entries) if value]
+    food_goals = _food_related_goals(goals)
 
     lines = [
         "SmartDiet - Cardapio do paciente",
         f"Paciente: {patient.full_name}",
-        f"Plano: {plan.title}",
         "",
+        "Dados alimentares do paciente",
+        f"Plano: {plan.title}",
     ]
     if anamnesis and anamnesis.main_goal:
-        lines.extend(["Objetivo", anamnesis.main_goal, ""])
+        lines.extend(_wrap_optional(f"Objetivo alimentar: {anamnesis.main_goal}"))
     if anamnesis and anamnesis.food_restrictions:
-        lines.extend(["Restricoes e preferencias", *wrap(anamnesis.food_restrictions, width=90), ""])
+        lines.extend(_wrap_optional(f"Restricoes/preferencias: {anamnesis.food_restrictions}"))
+    if anamnesis and anamnesis.food_preferences:
+        lines.extend(_wrap_optional(f"Preferencias alimentares: {anamnesis.food_preferences}"))
+    if anamnesis and anamnesis.physical_activity:
+        lines.extend(_wrap_optional(f"Rotina/atividade: {anamnesis.physical_activity}"))
     if plan.target_kcal:
-        lines.append(f"Meta energetica: {plan.target_kcal} kcal")
+        lines.append(f"Meta energetica do cardapio: {plan.target_kcal} kcal")
     if plan.target_protein_g:
-        lines.append(f"Proteinas: {plan.target_protein_g} g")
+        lines.append(f"Meta de proteinas: {plan.target_protein_g} g")
     if plan.target_carbs_g:
-        lines.append(f"Carboidratos: {plan.target_carbs_g} g")
+        lines.append(f"Meta de carboidratos: {plan.target_carbs_g} g")
     if plan.target_fat_g:
-        lines.append(f"Gorduras: {plan.target_fat_g} g")
+        lines.append(f"Meta de gorduras: {plan.target_fat_g} g")
+    lines.append(f"Registros no diario alimentar: {len(diary_entries)}")
+    lines.append(f"Aderencia registrada: {adherence_values[0] if adherence_values else 'Sem registro de aderencia'}")
     lines.append("")
+
+    if food_goals:
+        lines.append("Metas alimentares")
+        for goal in food_goals:
+            goal_line = (
+                f"{goal.focus}: atual {goal.current_value or '-'} / meta {goal.target_value or '-'} "
+                f"{goal.unit or ''} | {goal.status}"
+            )
+            lines.extend(_wrap_optional(goal_line))
+        lines.append("")
 
     for meal in plan.meals:
         lines.append(meal.meal_type)

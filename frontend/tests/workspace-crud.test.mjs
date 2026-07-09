@@ -59,12 +59,15 @@ test("etl page is an admin screen with real operational actions", () => {
 });
 
 test("initial workspace ships only the requested real patient", () => {
-  assert.match(workspaceSource, /name: "Gordeli"/);
+  assert.match(workspaceSource, /name: "Gordelice"/);
   assert.match(workspaceSource, /birthDate: "1998-07-08"/);
   assert.match(workspaceSource, /gender: "Feminino"/);
-  assert.match(workspaceSource, /weight: "87"/);
+  assert.match(workspaceSource, /weight: "86.4"/);
   assert.match(workspaceSource, /height: "160"/);
-  assert.match(workspaceSource, /bodyFat: "28"/);
+  assert.match(workspaceSource, /bodyFat: "37.8"/);
+  assert.match(workspaceSource, /Perda de gordura com preservacao de massa magra/);
+  assert.match(workspaceSource, /Aderencia ao cardapio/);
+  assert.match(workspaceSource, /structuredItems/);
   assert.match(workspaceSource, /Manutencao do paciente/);
   assert.match(workspaceSource, /smartdiet-gordeli-seeded/);
   assert.match(workspaceSource, /mergeRequestedInitialPatient/);

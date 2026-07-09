@@ -7,8 +7,8 @@ export const metrics = [
   },
   {
     label: "Planos da semana",
-    value: "0",
-    trend: "Nenhum plano criado",
+    value: "1",
+    trend: "Cardapio estruturado",
     tone: "petrol" as const,
   },
   {
@@ -21,11 +21,11 @@ export const metrics = [
 
 export const patients = [
   {
-    name: "Gordeli",
-    goal: "Acompanhamento nutricional",
+    name: "Gordelice",
+    goal: "Perda de gordura com preservacao de massa magra",
     status: "Ativo",
-    nextAction: "Definir metas clinicas",
-    lastMetric: "87 kg | 28% gordura",
+    nextAction: "Reavaliar aderencia ao lanche da tarde",
+    lastMetric: "86.4 kg | 37.8% gordura",
   },
 ];
 
@@ -116,7 +116,7 @@ export const meals = [
 export const timeline = [
   {
     title: "Paciente cadastrado",
-    detail: "Gordeli recebeu avaliacao inicial e bioimpedancia.",
+    detail: "Gordelice recebeu avaliacao, bioimpedancia, diario e cardapio teste.",
     time: "--:--",
   },
   {

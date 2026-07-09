@@ -183,6 +183,8 @@ type Assessment = {
 type MealPlan = {
   patientId: string;
   meals: Record<string, string>;
+  mealTimes?: Record<string, string>;
+  structuredItems?: StructuredPlanItem[];
 };
 
 type StructuredPlanItem = {
@@ -330,6 +332,15 @@ const requiredMeals = [
   "Jantar",
   "Ceia",
 ];
+
+const defaultMealTimes: Record<string, string> = {
+  "Cafe da manha": "07:00",
+  "Lanche da manha": "10:00",
+  Almoco: "12:30",
+  "Lanche da tarde": "16:00",
+  Jantar: "19:30",
+  Ceia: "22:00",
+};
 
 const brazilianSourceNames = ["TACO", "TACO 4a edicao", "TBCA"];
 
@@ -526,13 +537,17 @@ function goalToApi(goal: Partial<PatientFocusGoal> & Pick<PatientFocusGoal, "foc
 
 function mealPlanFromApi(plan: BackendMealPlan): MealPlan {
   const meals = Object.fromEntries(requiredMeals.map((meal) => [meal, ""]));
+  const mealTimes = { ...defaultMealTimes };
   for (const meal of plan.meals) {
+    const notes = meal.notes ?? "";
+    const timeMatch = notes.match(/Horario:\s*([0-2]\d:[0-5]\d)/i);
+    if (timeMatch) mealTimes[meal.meal_type] = timeMatch[1];
     meals[meal.meal_type] = [
-      meal.notes ?? "",
+      notes.replace(/Horario:\s*[0-2]\d:[0-5]\d/i, "").trim(),
       ...meal.items.map((item) => item.notes || `${item.grams} g`),
     ].filter(Boolean).join("\n");
   }
-  return { patientId: String(plan.patient_id), meals };
+  return { patientId: String(plan.patient_id), meals, mealTimes };
 }
 
 function recipeFromApi(recipe: BackendRecipe): Recipe {
@@ -650,6 +665,134 @@ const mealPlanTemplates: Record<string, Record<string, string>> = {
     Jantar: "Leguminosas, legumes, carboidrato complexo e fonte proteica vegetal.",
     Ceia: "Leite, iogurte, bebida vegetal fortificada ou fruta.",
   },
+};
+
+const mealPlanTemplateTimes: Record<string, Record<string, string>> = {
+  "Perda de gordura": {
+    "Cafe da manha": "07:00",
+    "Lanche da manha": "10:00",
+    Almoco: "12:30",
+    "Lanche da tarde": "16:00",
+    Jantar: "19:30",
+    Ceia: "22:00",
+  },
+  "Ganho de massa magra": {
+    "Cafe da manha": "07:00",
+    "Lanche da manha": "10:00",
+    Almoco: "12:30",
+    "Lanche da tarde": "16:30",
+    Jantar: "20:00",
+    Ceia: "22:30",
+  },
+  "Ganho de peso": {
+    "Cafe da manha": "07:00",
+    "Lanche da manha": "09:30",
+    Almoco: "12:30",
+    "Lanche da tarde": "16:00",
+    Jantar: "19:30",
+    Ceia: "22:00",
+  },
+  "Controle glicemico": {
+    "Cafe da manha": "07:00",
+    "Lanche da manha": "10:00",
+    Almoco: "12:30",
+    "Lanche da tarde": "16:00",
+    Jantar: "19:00",
+    Ceia: "21:30",
+  },
+  Hipertensao: {
+    "Cafe da manha": "07:00",
+    "Lanche da manha": "10:00",
+    Almoco: "12:30",
+    "Lanche da tarde": "16:00",
+    Jantar: "19:00",
+    Ceia: "21:30",
+  },
+  Vegetariano: {
+    "Cafe da manha": "07:30",
+    "Lanche da manha": "10:00",
+    Almoco: "12:30",
+    "Lanche da tarde": "16:00",
+    Jantar: "19:30",
+    Ceia: "22:00",
+  },
+};
+
+const mealPlanTemplateItems: Record<string, Array<{ meal: string; search: string[]; grams: string }>> = {
+  "Perda de gordura": [
+    { meal: "Cafe da manha", search: ["ovo"], grams: "100" },
+    { meal: "Cafe da manha", search: ["banana"], grams: "80" },
+    { meal: "Lanche da manha", search: ["iogurte"], grams: "170" },
+    { meal: "Almoco", search: ["arroz"], grams: "90" },
+    { meal: "Almoco", search: ["feijao"], grams: "80" },
+    { meal: "Almoco", search: ["frango"], grams: "120" },
+    { meal: "Lanche da tarde", search: ["pao"], grams: "50" },
+    { meal: "Jantar", search: ["frango"], grams: "120" },
+    { meal: "Jantar", search: ["legumes"], grams: "160" },
+    { meal: "Ceia", search: ["maca"], grams: "100" },
+  ],
+  "Ganho de massa magra": [
+    { meal: "Cafe da manha", search: ["aveia"], grams: "50" },
+    { meal: "Cafe da manha", search: ["leite"], grams: "200" },
+    { meal: "Cafe da manha", search: ["banana"], grams: "100" },
+    { meal: "Lanche da manha", search: ["iogurte"], grams: "170" },
+    { meal: "Almoco", search: ["arroz"], grams: "150" },
+    { meal: "Almoco", search: ["feijao"], grams: "100" },
+    { meal: "Almoco", search: ["frango"], grams: "150" },
+    { meal: "Lanche da tarde", search: ["banana"], grams: "100" },
+    { meal: "Lanche da tarde", search: ["aveia"], grams: "30" },
+    { meal: "Jantar", search: ["batata"], grams: "180" },
+    { meal: "Jantar", search: ["ovo"], grams: "100" },
+    { meal: "Ceia", search: ["leite"], grams: "200" },
+  ],
+  "Ganho de peso": [
+    { meal: "Cafe da manha", search: ["pao"], grams: "80" },
+    { meal: "Cafe da manha", search: ["ovo"], grams: "100" },
+    { meal: "Cafe da manha", search: ["banana"], grams: "120" },
+    { meal: "Lanche da manha", search: ["castanha"], grams: "30" },
+    { meal: "Almoco", search: ["arroz"], grams: "180" },
+    { meal: "Almoco", search: ["feijao"], grams: "120" },
+    { meal: "Almoco", search: ["carne"], grams: "150" },
+    { meal: "Lanche da tarde", search: ["leite"], grams: "250" },
+    { meal: "Lanche da tarde", search: ["aveia"], grams: "40" },
+    { meal: "Jantar", search: ["arroz"], grams: "150" },
+    { meal: "Jantar", search: ["frango"], grams: "150" },
+    { meal: "Ceia", search: ["iogurte"], grams: "170" },
+  ],
+  "Controle glicemico": [
+    { meal: "Cafe da manha", search: ["ovo"], grams: "100" },
+    { meal: "Cafe da manha", search: ["aveia"], grams: "30" },
+    { meal: "Lanche da manha", search: ["castanha"], grams: "20" },
+    { meal: "Almoco", search: ["feijao"], grams: "120" },
+    { meal: "Almoco", search: ["frango"], grams: "130" },
+    { meal: "Almoco", search: ["salada"], grams: "120" },
+    { meal: "Lanche da tarde", search: ["iogurte"], grams: "170" },
+    { meal: "Jantar", search: ["peixe"], grams: "130" },
+    { meal: "Jantar", search: ["legumes"], grams: "160" },
+  ],
+  Hipertensao: [
+    { meal: "Cafe da manha", search: ["banana"], grams: "100" },
+    { meal: "Cafe da manha", search: ["aveia"], grams: "30" },
+    { meal: "Lanche da manha", search: ["maca"], grams: "100" },
+    { meal: "Almoco", search: ["arroz"], grams: "100" },
+    { meal: "Almoco", search: ["feijao"], grams: "100" },
+    { meal: "Almoco", search: ["frango"], grams: "130" },
+    { meal: "Lanche da tarde", search: ["iogurte"], grams: "170" },
+    { meal: "Jantar", search: ["peixe"], grams: "130" },
+    { meal: "Jantar", search: ["legumes"], grams: "160" },
+  ],
+  Vegetariano: [
+    { meal: "Cafe da manha", search: ["iogurte"], grams: "170" },
+    { meal: "Cafe da manha", search: ["aveia"], grams: "40" },
+    { meal: "Lanche da manha", search: ["banana"], grams: "100" },
+    { meal: "Almoco", search: ["arroz"], grams: "130" },
+    { meal: "Almoco", search: ["feijao"], grams: "140" },
+    { meal: "Almoco", search: ["ovo"], grams: "100" },
+    { meal: "Lanche da tarde", search: ["pao"], grams: "60" },
+    { meal: "Jantar", search: ["lentilha"], grams: "140" },
+    { meal: "Jantar", search: ["legumes"], grams: "160" },
+    { meal: "Ceia", search: ["leite"], grams: "200" },
+  ],
 };
 
 const seedStore: Store = {
@@ -1753,9 +1896,10 @@ export function MealPlansWorkspace() {
   const [structuredFoodId, setStructuredFoodId] = useState(defaultBrazilianFoodId);
   const [structuredGrams, setStructuredGrams] = useState("100");
   const [productQuery, setProductQuery] = useState("");
-  const [structuredItems, setStructuredItems] = useState<StructuredPlanItem[]>([
-    { id: "plan-item-1", meal: "Almoco", foodId: defaultBrazilianFoodId, grams: "100" },
-  ]);
+  const defaultStructuredItems = useMemo(
+    () => [{ id: "plan-item-1", meal: "Almoco", foodId: defaultBrazilianFoodId, grams: "100" }],
+    [],
+  );
   const [energyTarget, setEnergyTarget] = useState<EnergyTarget | null>(null);
   const [macroTargets, setMacroTargets] = useState<MacroTargets | null>(null);
   const [mealAnalysis, setMealAnalysis] = useState<MealPlanAnalysis | null>(null);
@@ -1772,6 +1916,11 @@ export function MealPlansWorkspace() {
     const base = Object.fromEntries(requiredMeals.map((meal) => [meal, ""]));
     return { ...base, ...(currentPlan?.meals ?? {}) };
   });
+  const [mealTimes, setMealTimes] = useState<Record<string, string>>(() => ({
+    ...defaultMealTimes,
+    ...(currentPlan?.mealTimes ?? {}),
+  }));
+  const [structuredItems, setStructuredItems] = useState<StructuredPlanItem[]>(currentPlan?.structuredItems ?? defaultStructuredItems);
   const grams = Math.max(1, Number(referenceGrams) || 100);
   const referenceFood = prescriptionFoods.find((food) => food.id === referenceFoodId) ?? fallbackFood;
   const structuredFood = prescriptionFoods.find((food) => food.id === structuredFoodId) ?? fallbackFood;
@@ -1794,7 +1943,7 @@ export function MealPlansWorkspace() {
       const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId) ?? fallbackFood;
       return total + (scaledNutrient(food.kcal, Number(item.grams)) ?? 0);
     }, 0);
-    return { meal, notes: meals[meal] ?? "", items, kcal };
+    return { meal, time: mealTimes[meal] ?? "", notes: meals[meal] ?? "", items, kcal };
   });
   const productQuickSearches = ["banana", "maca", "aveia", "mingau", "iogurte", "ovo", "arroz", "feijao"];
   const filteredProducts = useMemo(() => {
@@ -1811,7 +1960,9 @@ export function MealPlansWorkspace() {
     const plan = store.mealPlans.find((item) => item.patientId === patientId);
     const base = Object.fromEntries(requiredMeals.map((meal) => [meal, ""]));
     setMeals({ ...base, ...(plan?.meals ?? {}) });
-  }, [patientId, store.mealPlans]);
+    setMealTimes({ ...defaultMealTimes, ...(plan?.mealTimes ?? {}) });
+    setStructuredItems(plan?.structuredItems ?? defaultStructuredItems);
+  }, [defaultStructuredItems, patientId, store.mealPlans]);
 
   useEffect(() => {
     async function loadBackendPlans() {
@@ -1836,7 +1987,7 @@ export function MealPlansWorkspace() {
     setStore((current) => ({
       ...current,
       mealPlans: [
-        { patientId, meals },
+        { patientId, meals, mealTimes, structuredItems },
         ...current.mealPlans.filter((plan) => plan.patientId !== patientId),
       ],
     }));
@@ -1859,7 +2010,7 @@ export function MealPlansWorkspace() {
         notes: "Plano criado pelo workspace SmartDiet Beta.",
         meals: requiredMeals.map((meal) => ({
           meal_type: meal,
-          notes: meals[meal] || null,
+          notes: [mealTimes[meal] ? `Horario: ${mealTimes[meal]}` : "", meals[meal] || ""].filter(Boolean).join("\n") || null,
           items: structuredItems
             .filter((item) => item.meal === meal)
             .map((item) => {
@@ -1890,9 +2041,34 @@ export function MealPlansWorkspace() {
     window.open(apiUrl(`/patients/${patientId}/reports/meal-plan.pdf`), "_blank", "noopener,noreferrer");
   }
 
+  function findFoodIdForTemplate(searchTerms: string[]) {
+    const normalizedTerms = searchTerms.map(normalizeQuery);
+    return (
+      prescriptionFoods.find((food) => {
+        const name = normalizeQuery(food.name);
+        return normalizedTerms.every((term) => name.includes(term));
+      })?.id ?? fallbackFood.id
+    );
+  }
+
+  function templateStructuredItems(templateName: string) {
+    return (mealPlanTemplateItems[templateName] ?? []).map((item, index) => ({
+      id: createId(`plan-${templateName}-${index}`),
+      meal: item.meal,
+      foodId: findFoodIdForTemplate(item.search),
+      grams: item.grams,
+    }));
+  }
+
   function applyTemplate(templateName: string) {
     setSelectedTemplate(templateName);
     setMeals({ ...meals, ...mealPlanTemplates[templateName] });
+    setMealTimes({ ...mealTimes, ...(mealPlanTemplateTimes[templateName] ?? {}) });
+    setStructuredItems(templateStructuredItems(templateName));
+    setMealAnalysis(null);
+    setClinicalAlerts(null);
+    setAnalysisStatus("idle");
+    setPersistenceMessage("Modelo aplicado com horarios e itens estruturados para calculo de kcal.");
   }
 
   function addSubstitutionToMeal(food: TacoFood) {
@@ -2057,6 +2233,7 @@ export function MealPlansWorkspace() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-graphite">{record.meal}</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-terracotta">{record.time || "Horario livre"}</p>
                     <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-graphite/65">
                       {record.notes || "Sem orientacao textual registrada."}
                     </p>
@@ -2146,10 +2323,22 @@ export function MealPlansWorkspace() {
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {requiredMeals.map((meal) => (
-            <label className={labelClass} key={meal}>
-              {meal}
-              <textarea className={textareaClass} value={meals[meal] ?? ""} onChange={(e) => setMeals({ ...meals, [meal]: e.target.value })} />
-            </label>
+            <div className="rounded-smart border border-line bg-background p-3" key={meal}>
+              <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+                <label className={labelClass}>
+                  Refeicao
+                  <input className={inputClass} value={meal} readOnly />
+                </label>
+                <label className={labelClass}>
+                  Horario
+                  <input className={inputClass} type="time" value={mealTimes[meal] ?? ""} onChange={(e) => setMealTimes({ ...mealTimes, [meal]: e.target.value })} />
+                </label>
+              </div>
+              <label className={`${labelClass} mt-3 block`}>
+                Orientacao do cardapio
+                <textarea className={textareaClass} value={meals[meal] ?? ""} onChange={(e) => setMeals({ ...meals, [meal]: e.target.value })} />
+              </label>
+            </div>
           ))}
         </div>
         <div className="mt-5 rounded-smart border border-line bg-background p-4">

@@ -31,7 +31,7 @@ import { NutritionBadge } from "@/shared/components/nutrition-badge";
 import { SmartCard } from "@/shared/components/smart-card";
 import { tacoFoods, type TacoFood } from "@/modules/foods/taco-foods";
 import { tbcaFoods } from "@/modules/foods/tbca-foods";
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut, apiUrl, requireApiData } from "@/shared/api/client";
+import { API_BASE_URL, apiDelete, apiGet, apiPatch, apiPost, apiPut, apiUrl, requireApiData } from "@/shared/api/client";
 
 type Patient = {
   id: string;
@@ -2168,7 +2168,7 @@ export function MealPlansWorkspace() {
       setAnalysisStatus("ready");
     } catch {
       setAnalysisStatus("error");
-      setAnalysisMessage("Nao foi possivel consultar o backend nutricional. Verifique se a API esta rodando em 127.0.0.1:8000.");
+      setAnalysisMessage(`Nao foi possivel consultar o backend nutricional. Confira se NEXT_PUBLIC_API_BASE_URL aponta para ${API_BASE_URL.includes("/api/v1") ? API_BASE_URL : `${API_BASE_URL}/api/v1`}.`);
     }
   }
 

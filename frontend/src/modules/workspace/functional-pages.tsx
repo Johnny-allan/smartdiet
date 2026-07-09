@@ -4396,6 +4396,14 @@ export function ReportsWorkspace() {
       ["Total energetico estruturado", formatNutrient(mealPlanTotalKcal, " kcal")],
       ["Refeicoes no cardapio", `${requiredMeals.filter((meal) => selectedPlan?.meals?.[meal] || mealPlanItems.some((item) => item.meal === meal)).length} de ${requiredMeals.length}`],
     ];
+    const mealGoalRows = [
+      ["Objetivo do plano", selectedAnamnesis?.mainGoal || selectedPatient?.goal || "Nao registrado"],
+      ["Restricoes e preferencias", selectedAnamnesis?.restrictions || "Sem restricoes registradas."],
+      ["Rotina considerada", selectedAnamnesis?.routine || "Sem rotina registrada."],
+      ["Conduta/observacoes", selectedAnamnesis?.clinicalNotes || selectedPatient?.notes || "Sem observacoes registradas."],
+      ["Meta de aderencia", adherenceGoal?.target ? `${adherenceGoal.target}${adherenceGoal.unit || ""}` : "Sem meta cadastrada"],
+      ["Aderencia media", averageDiaryAdherence !== null ? `${averageDiaryAdherence}%` : "Sem registro no diario"],
+    ];
     const bioimpedanceRows = [
       ["Data", latestBioimpedance?.date || "Nao registrado"],
       ["Gordura corporal", latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "Nao registrado"],
@@ -4407,8 +4415,8 @@ export function ReportsWorkspace() {
       ["TMB", latestBioimpedance?.bmr ? `${latestBioimpedance.bmr} kcal` : "Nao registrado"],
     ];
     return `
-      <h1>Resumo alimentar</h1>
-      <p class="muted">Plano alimentar estruturado para o paciente revisar horarios, refeicoes e itens prescritos.</p>
+      <h1>Resumo alimentar / Plano alimentar</h1>
+      <p class="muted">Dieta organizada a partir dos dados preenchidos pelo nutricionista para o paciente seguir e revisar.</p>
       <section>
         <h2>Dados do paciente</h2>
         <table>${patientRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
@@ -4416,6 +4424,10 @@ export function ReportsWorkspace() {
       <section>
         <h2>Bioimpedancia</h2>
         <table>${bioimpedanceRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
+      </section>
+      <section>
+        <h2>Orientacoes do nutricionista</h2>
+        <table>${mealGoalRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
       </section>
       <section>
         <h2>Plano por refeicao</h2>
@@ -4450,20 +4462,20 @@ export function ReportsWorkspace() {
             : "<p>Nenhum diario alimentar registrado.</p>"
         }
       </section>
-      <section>
-        <h2>Receitas de apoio</h2>
-        ${
-          selectedRecipes.length
-            ? selectedRecipes.map((recipe) => `
+      ${
+        selectedRecipes.length
+          ? `<section>
+              <h2>Preparos de apoio</h2>
+              ${selectedRecipes.map((recipe) => `
               <article>
                 <h3>${escapeHtml(recipe.title)} <span>${escapeHtml(`${recipe.servings} porcao(oes)`)}</span></h3>
                 <p>${escapeHtml(recipe.ingredients)}</p>
                 <p><strong>Kcal:</strong> ${escapeHtml(recipe.kcal || "-")} | <strong>Proteina:</strong> ${escapeHtml(recipe.protein || "-")} g | <strong>Tags:</strong> ${escapeHtml(recipe.tags || "-")}</p>
               </article>
-            `).join("")
-            : "<p>Nenhuma receita vinculada.</p>"
-        }
-      </section>
+            `).join("")}
+            </section>`
+          : ""
+      }
     `;
   }
 

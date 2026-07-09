@@ -4,7 +4,31 @@
 
 :root {
   color-scheme: light;
-  background: #F3F4F6;
+  --color-forest: 22 138 90;
+  --color-sage: 155 231 191;
+  --color-terracotta: 249 115 22;
+  --color-petrol: 37 99 235;
+  --color-background: 243 244 246;
+  --color-graphite: 63 70 82;
+  --color-surface: 255 255 255;
+  --color-line: 214 218 225;
+  --color-mist: 236 253 243;
+  --color-shadow: 63 70 82;
+  background: rgb(var(--color-background));
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-forest: 66 211 139;
+  --color-sage: 72 126 99;
+  --color-terracotta: 251 146 60;
+  --color-petrol: 96 165 250;
+  --color-background: 31 34 39;
+  --color-graphite: 232 235 239;
+  --color-surface: 42 46 53;
+  --color-line: 75 82 92;
+  --color-mist: 36 58 48;
+  --color-shadow: 0 0 0;
 }
 
 * {
@@ -18,8 +42,8 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: #F3F4F6;
-  color: #3F4652;
+  background: rgb(var(--color-background));
+  color: rgb(var(--color-graphite));
 }
 
 button,
@@ -32,7 +56,7 @@ textarea {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 2px solid #F97316;
+  outline: 2px solid rgb(var(--color-terracotta));
   outline-offset: 2px;
 }
 
@@ -43,11 +67,11 @@ input:focus-visible {
   width: 40px;
   place-items: center;
   border-radius: 8px;
-  background: #168A5A;
+  background: rgb(var(--color-forest));
   color: #FFFFFF;
   font-weight: 800;
   line-height: 1;
-  box-shadow: 0 12px 34px rgba(22, 138, 90, 0.24);
+  box-shadow: 0 12px 34px rgb(var(--color-forest) / 0.24);
 }
 
 .smart-logo-mark::after {
@@ -58,12 +82,12 @@ input:focus-visible {
   width: 8px;
   content: "";
   border-radius: 8px 8px 8px 0;
-  background: #F97316;
+  background: rgb(var(--color-terracotta));
   transform: rotate(38deg);
 }
 
 .smart-scrollbar {
-  scrollbar-color: #F97316 transparent;
+  scrollbar-color: rgb(var(--color-terracotta)) transparent;
   scrollbar-width: thin;
 }
 

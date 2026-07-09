@@ -5,15 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        forest: "#168A5A",
-        sage: "#9BE7BF",
-        terracotta: "#F97316",
-        petrol: "#2563EB",
-        background: "#F3F4F6",
-        graphite: "#3F4652",
-        surface: "#FFFFFF",
-        line: "#D6DAE1",
-        mist: "#ECFDF3",
+        forest: "rgb(var(--color-forest) / <alpha-value>)",
+        sage: "rgb(var(--color-sage) / <alpha-value>)",
+        terracotta: "rgb(var(--color-terracotta) / <alpha-value>)",
+        petrol: "rgb(var(--color-petrol) / <alpha-value>)",
+        background: "rgb(var(--color-background) / <alpha-value>)",
+        graphite: "rgb(var(--color-graphite) / <alpha-value>)",
+        surface: "rgb(var(--color-surface) / <alpha-value>)",
+        line: "rgb(var(--color-line) / <alpha-value>)",
+        mist: "rgb(var(--color-mist) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["Inter", "Manrope", "Arial", "sans-serif"],
@@ -22,8 +22,8 @@ const config: Config = {
         smart: "8px",
       },
       boxShadow: {
-        smart: "0 16px 40px rgba(63, 70, 82, 0.10)",
-        subtle: "0 1px 3px rgba(63, 70, 82, 0.10)",
+        smart: "0 16px 40px rgb(var(--color-shadow) / 0.16)",
+        subtle: "0 1px 3px rgb(var(--color-shadow) / 0.12)",
       },
     },
   },

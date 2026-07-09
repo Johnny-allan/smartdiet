@@ -765,6 +765,7 @@ const inputClass =
 const textareaClass =
   "min-h-[92px] w-full rounded-smart border border-line bg-surface px-3 py-2 text-[14px] text-graphite transition duration-200 placeholder:text-graphite/45 hover:border-sage focus:border-petrol";
 const labelClass = "space-y-1 text-[13px] font-medium text-graphite";
+const patientGenderOptions = ["Masculino", "Feminino"];
 const primaryButtonClass =
   "inline-flex h-10 items-center justify-center rounded-smart bg-forest px-4 text-[14px] font-semibold text-white shadow-subtle transition duration-200 hover:bg-petrol";
 const secondaryButtonClass =
@@ -1299,7 +1300,17 @@ export function PatientsWorkspace() {
             <label className={labelClass}>Nome completo<input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
             <div className="grid gap-3 md:grid-cols-2">
               <label className={labelClass}>Nascimento<input className={inputClass} type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></label>
-              <label className={labelClass}>Genero<input className={inputClass} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} /></label>
+              <label className={labelClass}>
+                Genero
+                <select className={inputClass} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+                  <option value="">Nao informado</option>
+                  {patientGenderOptions.map((gender) => (
+                    <option key={gender} value={gender}>
+                      {gender}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <label className={labelClass}>Telefone<input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>

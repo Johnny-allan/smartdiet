@@ -41,12 +41,14 @@ type WorkspaceSettings = {
   preferBrazilianFoods: boolean;
   compactFoodCards: boolean;
   showFoodSodium: boolean;
+  softDarkMode: boolean;
 };
 
 const defaultSettings: WorkspaceSettings = {
   preferBrazilianFoods: true,
   compactFoodCards: false,
   showFoodSodium: true,
+  softDarkMode: false,
 };
 
 const mobileNavItems = [
@@ -75,13 +77,16 @@ export function Header() {
   useEffect(() => {
     const raw = window.localStorage.getItem("smartdiet-settings");
     if (raw) {
-      setSettings({ ...defaultSettings, ...(JSON.parse(raw) as Partial<WorkspaceSettings>) });
+      const value = { ...defaultSettings, ...(JSON.parse(raw) as Partial<WorkspaceSettings>) };
+      setSettings(value);
+      document.documentElement.dataset.theme = value.softDarkMode ? "dark" : "light";
     }
   }, []);
 
   function updateSettings(next: Partial<WorkspaceSettings>) {
     const value = { ...settings, ...next };
     setSettings(value);
+    document.documentElement.dataset.theme = value.softDarkMode ? "dark" : "light";
     window.localStorage.setItem("smartdiet-settings", JSON.stringify(value));
     window.dispatchEvent(new CustomEvent("smartdiet-settings-changed", { detail: value }));
   }
@@ -184,6 +189,15 @@ export function Header() {
                   </button>
                 </div>
                 <div className="mt-4 grid gap-3">
+                  <label className="flex items-center justify-between gap-3 rounded-smart border border-line bg-background px-3 py-2 text-[13px] font-medium text-graphite">
+                    Modo escuro suave
+                    <input
+                      checked={settings.softDarkMode}
+                      className="h-4 w-4 accent-terracotta"
+                      type="checkbox"
+                      onChange={(event) => updateSettings({ softDarkMode: event.target.checked })}
+                    />
+                  </label>
                   <label className="flex items-center justify-between gap-3 rounded-smart border border-line bg-background px-3 py-2 text-[13px] font-medium text-graphite">
                     Priorizar bases brasileiras
                     <input

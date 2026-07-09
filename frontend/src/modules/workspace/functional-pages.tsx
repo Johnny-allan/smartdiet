@@ -809,7 +809,28 @@ const seedStore: Store = {
       notes: "Paciente de teste preenchida como atendimento completo. Queixa principal: dificuldade de organizar refeicoes durante o trabalho e fome no fim da tarde.",
     },
   ],
-  recipes: [],
+  recipes: [
+    {
+      id: "recipe-gordeli-1",
+      patientId: "patient-gordeli",
+      title: "Frango desfiado para marmitas",
+      servings: "5",
+      ingredients: "Peito de frango cozido e desfiado, cebola, alho, tomate, cheiro-verde e temperos naturais. Preparar sem excesso de oleo para usar no almoco e lanche da tarde.",
+      kcal: "165",
+      protein: "31",
+      tags: "marmita, proteina, baixo teor de gordura",
+    },
+    {
+      id: "recipe-gordeli-2",
+      patientId: "patient-gordeli",
+      title: "Iogurte com aveia e banana",
+      servings: "1",
+      ingredients: "Iogurte natural desnatado, aveia em flocos, banana nanica e canela. Opcao de cafe da manha para dias de treino.",
+      kcal: "310",
+      protein: "15",
+      tags: "cafe da manha, pre-treino, fibra",
+    },
+  ],
   assessments: [
     {
       id: "assessment-gordeli-1",
@@ -1023,6 +1044,7 @@ function mergeRequestedInitialPatient(store: Store): Store {
     return {
       ...store,
       patients: [seedStore.patients[0], ...store.patients.filter((patient) => patient.id !== "patient-gordeli")],
+      recipes: [...seedStore.recipes, ...store.recipes.filter((item) => item.patientId !== "patient-gordeli")],
       assessments: [...seedStore.assessments, ...store.assessments.filter((item) => item.patientId !== "patient-gordeli")],
       mealPlans: [...seedStore.mealPlans, ...store.mealPlans.filter((item) => item.patientId !== "patient-gordeli")],
       anamnesis: [...seedStore.anamnesis, ...store.anamnesis.filter((item) => item.patientId !== "patient-gordeli")],
@@ -1034,6 +1056,7 @@ function mergeRequestedInitialPatient(store: Store): Store {
   return {
     ...store,
     patients: [...seedStore.patients, ...store.patients],
+    recipes: [...seedStore.recipes, ...store.recipes],
     assessments: [...seedStore.assessments, ...store.assessments],
     mealPlans: [...seedStore.mealPlans, ...store.mealPlans],
     anamnesis: [...seedStore.anamnesis, ...store.anamnesis],
@@ -1192,7 +1215,6 @@ function useSmartDietStore() {
 
   useEffect(() => {
     const raw = window.localStorage.getItem("smartdiet-store");
-    const gordeliSeeded = window.localStorage.getItem("smartdiet-gordeli-seeded") === "true";
     if (raw) {
       const parsed = JSON.parse(raw) as Store;
       const migrated = removeLegacySeedPatients({
@@ -1201,7 +1223,7 @@ function useSmartDietStore() {
         foods: [],
         focusGoals: (parsed.focusGoals ?? seedStore.focusGoals).map((goal) => normalizePatientGoal(goal as PatientFocusGoal)),
       });
-      setStore(gordeliSeeded ? migrated : mergeRequestedInitialPatient(migrated));
+      setStore(mergeRequestedInitialPatient(migrated));
       window.localStorage.setItem("smartdiet-gordeli-seeded", "true");
     } else {
       window.localStorage.setItem("smartdiet-gordeli-seeded", "true");
@@ -4192,6 +4214,7 @@ export function ReportsWorkspace() {
   const selectedPlan = store.mealPlans.find((item) => item.patientId === selectedPatient?.id);
   const selectedAnamnesis = store.anamnesis.find((item) => item.patientId === selectedPatient?.id);
   const selectedGoals = store.focusGoals.filter((item) => item.patientId === selectedPatient?.id);
+  const selectedRecipes = store.recipes.filter((item) => item.patientId === selectedPatient?.id);
   const latestAssessment = selectedAssessments[0];
   const latestBioimpedance = selectedBioimpedance[0];
   const latestDiary = selectedDiary[0];
@@ -4280,6 +4303,9 @@ export function ReportsWorkspace() {
       ["Objetivo", selectedPatient?.goal || "Nao registrado"],
       ["Nascimento", selectedPatient?.birthDate || "Nao informado"],
       ["Genero", selectedPatient?.gender || "Nao informado"],
+      ["Telefone", selectedPatient?.phone || "Nao informado"],
+      ["Email", selectedPatient?.email || "Nao informado"],
+      ["Observacoes do cadastro", selectedPatient?.notes || "Sem observacoes."],
       ["Peso", latestAssessment?.weight ? `${latestAssessment.weight} kg` : "Nao registrado"],
       ["Altura", latestAssessment?.height ? `${latestAssessment.height} cm` : "Nao registrado"],
       ["IMC", latestAssessment?.bmi || "Nao registrado"],
@@ -4295,17 +4321,60 @@ export function ReportsWorkspace() {
         <table>${rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
       </section>
       <section>
+        <h2>Historico de avaliacoes</h2>
+        ${
+          selectedAssessments.length
+            ? `<table>${selectedAssessments.map((item) => `<tr><th>${escapeHtml(item.date)}</th><td>${escapeHtml(`Peso ${item.weight} kg | Altura ${item.height} cm | IMC ${item.bmi}`)}<br />${escapeHtml(item.notes || "Sem observacoes.")}</td></tr>`).join("")}</table>`
+            : "<p>Nenhuma avaliacao registrada.</p>"
+        }
+      </section>
+      <section>
+        <h2>Bioimpedancia completa</h2>
+        ${
+          selectedBioimpedance.length
+            ? selectedBioimpedance.map((item) => `
+              <article>
+                <h3>${escapeHtml(item.date)} <span>${escapeHtml(item.device || "Equipamento nao informado")}</span></h3>
+                <table>
+                  <tr><th>Protocolo</th><td>${escapeHtml(item.protocol || "Nao informado")}</td></tr>
+                  <tr><th>Gordura corporal</th><td>${escapeHtml(item.bodyFat ? `${item.bodyFat}%` : "Nao registrado")}</td></tr>
+                  <tr><th>Massa gorda</th><td>${escapeHtml(item.fatMass ? `${item.fatMass} kg` : "Nao registrado")}</td></tr>
+                  <tr><th>Massa magra</th><td>${escapeHtml(item.leanMass ? `${item.leanMass} kg` : "Nao registrado")}</td></tr>
+                  <tr><th>Massa muscular</th><td>${escapeHtml(item.muscleMass ? `${item.muscleMass} kg` : "Nao registrado")}</td></tr>
+                  <tr><th>Agua corporal</th><td>${escapeHtml(item.water ? `${item.water} L` : "Nao registrado")}</td></tr>
+                  <tr><th>Gordura visceral</th><td>${escapeHtml(item.visceralFat || "Nao registrado")}</td></tr>
+                  <tr><th>Idade metabolica</th><td>${escapeHtml(item.metabolicAge || "Nao registrado")}</td></tr>
+                  <tr><th>Angulo de fase</th><td>${escapeHtml(item.phaseAngle || "Nao registrado")}</td></tr>
+                  <tr><th>Massa ossea</th><td>${escapeHtml(item.boneMass ? `${item.boneMass} kg` : "Nao registrado")}</td></tr>
+                  <tr><th>TMB</th><td>${escapeHtml(item.bmr ? `${item.bmr} kcal` : "Nao registrado")}</td></tr>
+                  <tr><th>Observacoes</th><td>${escapeHtml(item.notes || "Sem observacoes.")}</td></tr>
+                </table>
+              </article>
+            `).join("")
+            : "<p>Nenhuma bioimpedancia registrada.</p>"
+        }
+      </section>
+      <section>
         <h2>Anamnese e conduta</h2>
         <p><strong>Objetivo principal:</strong> ${escapeHtml(selectedAnamnesis?.mainGoal || selectedPatient?.goal || "Nao registrado")}</p>
         <p><strong>Restricoes:</strong> ${escapeHtml(selectedAnamnesis?.restrictions || "Sem restricoes registradas.")}</p>
         <p><strong>Rotina:</strong> ${escapeHtml(selectedAnamnesis?.routine || "Sem rotina registrada.")}</p>
+        <p><strong>Notas clinicas:</strong> ${escapeHtml(selectedAnamnesis?.clinicalNotes || "Sem notas clinicas registradas.")}</p>
       </section>
       <section>
         <h2>Metas acompanhadas</h2>
         ${
           selectedGoals.length
-            ? `<ul>${selectedGoals.map((goal) => `<li><strong>${escapeHtml(goal.focus)}</strong>: ${escapeHtml(goal.current || "-")} de ${escapeHtml(goal.target || "-")} ${escapeHtml(goal.unit || "")} (${escapeHtml(goal.status)})</li>`).join("")}</ul>`
+            ? `<ul>${selectedGoals.map((goal) => `<li><strong>${escapeHtml(goal.focus)}</strong>: ${escapeHtml(goal.current || "-")} de ${escapeHtml(goal.target || "-")} ${escapeHtml(goal.unit || "")} (${escapeHtml(goal.status)}). ${escapeHtml(goal.notes || "")}</li>`).join("")}</ul>`
             : "<p>Nenhuma meta registrada.</p>"
+        }
+      </section>
+      <section>
+        <h2>Diario alimentar</h2>
+        ${
+          selectedDiary.length
+            ? `<table>${selectedDiary.map((entry) => `<tr><th>${escapeHtml(`${entry.date} - ${entry.meal}`)}</th><td>${escapeHtml(entry.description)}<br /><strong>Aderencia:</strong> ${escapeHtml(entry.adherence)}</td></tr>`).join("")}</table>`
+            : "<p>Nenhum diario alimentar registrado.</p>"
         }
       </section>
     `;
@@ -4372,6 +4441,28 @@ export function ReportsWorkspace() {
             </article>
           `;
         }).join("")}
+      </section>
+      <section>
+        <h2>Diario e aderencia</h2>
+        ${
+          selectedDiary.length
+            ? `<table>${selectedDiary.map((entry) => `<tr><th>${escapeHtml(`${entry.date} - ${entry.meal}`)}</th><td>${escapeHtml(entry.description)}<br /><strong>Aderencia:</strong> ${escapeHtml(entry.adherence)}</td></tr>`).join("")}</table>`
+            : "<p>Nenhum diario alimentar registrado.</p>"
+        }
+      </section>
+      <section>
+        <h2>Receitas de apoio</h2>
+        ${
+          selectedRecipes.length
+            ? selectedRecipes.map((recipe) => `
+              <article>
+                <h3>${escapeHtml(recipe.title)} <span>${escapeHtml(`${recipe.servings} porcao(oes)`)}</span></h3>
+                <p>${escapeHtml(recipe.ingredients)}</p>
+                <p><strong>Kcal:</strong> ${escapeHtml(recipe.kcal || "-")} | <strong>Proteina:</strong> ${escapeHtml(recipe.protein || "-")} g | <strong>Tags:</strong> ${escapeHtml(recipe.tags || "-")}</p>
+              </article>
+            `).join("")
+            : "<p>Nenhuma receita vinculada.</p>"
+        }
       </section>
     `;
   }

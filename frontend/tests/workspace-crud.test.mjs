@@ -67,11 +67,17 @@ test("initial workspace ships only the requested real patient", () => {
   assert.match(workspaceSource, /bodyFat: "37.8"/);
   assert.match(workspaceSource, /Perda de gordura com preservacao de massa magra/);
   assert.match(workspaceSource, /Aderencia ao cardapio/);
+  assert.match(workspaceSource, /Frango desfiado para marmitas/);
+  assert.match(workspaceSource, /Iogurte com aveia e banana/);
+  assert.match(workspaceSource, /Historico de avaliacoes/);
+  assert.match(workspaceSource, /Bioimpedancia completa/);
+  assert.match(workspaceSource, /Diario e aderencia/);
+  assert.match(workspaceSource, /Receitas de apoio/);
   assert.match(workspaceSource, /structuredItems/);
   assert.match(workspaceSource, /Manutencao do paciente/);
   assert.match(workspaceSource, /smartdiet-gordeli-seeded/);
   assert.match(workspaceSource, /mergeRequestedInitialPatient/);
   for (const source of [workspaceSource, dashboardDataSource, smartSearchSource]) {
-    assert.doesNotMatch(source, /Marina Costa|Rafael Lima|Beatriz Nunes|Iogurte com aveia e banana/);
+    assert.doesNotMatch(source, /Marina Costa|Rafael Lima|Beatriz Nunes/);
   }
 });

@@ -4,8 +4,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.assessment.repository import AssessmentRepository
-from app.clinical.models import PatientGoal
-from app.clinical.repository import AnamnesisRepository, PatientGoalRepository
+from app.clinical.repository import AnamnesisRepository
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError
 from app.diary.repository import DiaryRepository
@@ -40,8 +39,7 @@ SECTION_TITLES = {
     "Bioimpedancia",
     "Plano alimentar",
     "Diario alimentar",
-    "Dados alimentares do paciente",
-    "Metas alimentares",
+    "Dados do paciente",
     "Objetivo",
     "Restricoes e preferencias",
 }
@@ -163,16 +161,6 @@ def _extract_adherence(notes: str | None) -> str | None:
     return None
 
 
-def _food_related_goals(goals: list[PatientGoal]) -> list[PatientGoal]:
-    keywords = ("aderencia", "cardapio", "dieta", "aliment", "agua", "proteina", "caloria", "refeic")
-    matched = [
-        goal
-        for goal in goals
-        if any(keyword in f"{goal.focus} {goal.metric} {goal.notes or ''}".lower() for keyword in keywords)
-    ]
-    return (matched or goals)[:4]
-
-
 def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
     patient = PatientRepository(db).get(patient_id)
     if patient is None:
@@ -262,15 +250,15 @@ def patient_meal_plan_pdf(patient_id: int, db: Session = Depends(get_db)) -> Res
     plan = plans[0]
     anamnesis = AnamnesisRepository(db).get_by_patient(patient_id)
     diary_entries = DiaryRepository(db).list_by_patient(patient_id)
-    goals = PatientGoalRepository(db).list_by_patient(patient_id)
+    bioimpedances = AssessmentRepository(db).list_bioimpedance(patient_id)
+    latest_bioimpedance = bioimpedances[0] if bioimpedances else None
     adherence_values = [value for value in (_extract_adherence(item.notes) for item in diary_entries) if value]
-    food_goals = _food_related_goals(goals)
 
     lines = [
         "SmartDiet - Cardapio do paciente",
         f"Paciente: {patient.full_name}",
         "",
-        "Dados alimentares do paciente",
+        "Dados do paciente",
         f"Plano: {plan.title}",
     ]
     if anamnesis and anamnesis.main_goal:
@@ -293,15 +281,19 @@ def patient_meal_plan_pdf(patient_id: int, db: Session = Depends(get_db)) -> Res
     lines.append(f"Aderencia registrada: {adherence_values[0] if adherence_values else 'Sem registro de aderencia'}")
     lines.append("")
 
-    if food_goals:
-        lines.append("Metas alimentares")
-        for goal in food_goals:
-            goal_line = (
-                f"{goal.focus}: atual {goal.current_value or '-'} / meta {goal.target_value or '-'} "
-                f"{goal.unit or ''} | {goal.status}"
-            )
-            lines.extend(_wrap_optional(goal_line))
-        lines.append("")
+    lines.append("Bioimpedancia")
+    if latest_bioimpedance:
+        lines.append(f"Data: {latest_bioimpedance.date}")
+        lines.append(f"Gordura corporal: {latest_bioimpedance.body_fat_percent or '-'}%")
+        lines.append(f"Massa gorda: {latest_bioimpedance.fat_mass_kg or '-'} kg")
+        lines.append(f"Massa magra: {latest_bioimpedance.lean_mass_kg or '-'} kg")
+        lines.append(f"Massa muscular: {latest_bioimpedance.muscle_mass_kg or '-'} kg")
+        lines.append(f"Agua corporal: {latest_bioimpedance.total_body_water_l or '-'} L")
+        lines.append(f"Gordura visceral: {latest_bioimpedance.visceral_fat_level or '-'}")
+        lines.append(f"TMB: {latest_bioimpedance.basal_metabolic_rate_kcal or '-'} kcal")
+    else:
+        lines.append("Sem bioimpedancia registrada.")
+    lines.append("")
 
     for meal in plan.meals:
         lines.append(meal.meal_type)

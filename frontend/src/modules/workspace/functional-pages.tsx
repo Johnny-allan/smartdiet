@@ -4068,10 +4068,6 @@ export function ReportsWorkspace() {
     const text = normalizeQuery(`${goal.focus} ${goal.metric}`);
     return text.includes("aderencia");
   });
-  const visibleMealGoals = [
-    ...(adherenceGoal ? [adherenceGoal] : []),
-    ...selectedGoals.filter((goal) => goal.id !== adherenceGoal?.id),
-  ].slice(0, 3);
   const prescriptionFoods = useMemo(() => [...tbcaFoods, ...tacoFoods].filter(hasNutrientData), []);
   const mealPlanItems = selectedPlan?.structuredItems ?? [];
   const mealPlanTotalKcal = mealPlanItems.reduce((total, item) => {
@@ -4191,20 +4187,26 @@ export function ReportsWorkspace() {
       ["Total energetico estruturado", formatNutrient(mealPlanTotalKcal, " kcal")],
       ["Refeicoes no cardapio", `${requiredMeals.filter((meal) => selectedPlan?.meals?.[meal] || mealPlanItems.some((item) => item.meal === meal)).length} de ${requiredMeals.length}`],
     ];
+    const bioimpedanceRows = [
+      ["Data", latestBioimpedance?.date || "Nao registrado"],
+      ["Gordura corporal", latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "Nao registrado"],
+      ["Massa gorda", latestBioimpedance?.fatMass ? `${latestBioimpedance.fatMass} kg` : "Nao registrado"],
+      ["Massa magra", latestBioimpedance?.leanMass ? `${latestBioimpedance.leanMass} kg` : "Nao registrado"],
+      ["Massa muscular", latestBioimpedance?.muscleMass ? `${latestBioimpedance.muscleMass} kg` : "Nao registrado"],
+      ["Agua corporal", latestBioimpedance?.water ? `${latestBioimpedance.water} L` : "Nao registrado"],
+      ["Gordura visceral", latestBioimpedance?.visceralFat || "Nao registrado"],
+      ["TMB", latestBioimpedance?.bmr ? `${latestBioimpedance.bmr} kcal` : "Nao registrado"],
+    ];
     return `
       <h1>Resumo alimentar</h1>
       <p class="muted">Plano alimentar estruturado para o paciente revisar horarios, refeicoes e itens prescritos.</p>
       <section>
-        <h2>Dados alimentares do paciente</h2>
+        <h2>Dados do paciente</h2>
         <table>${patientRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
       </section>
       <section>
-        <h2>Metas e aderencia ao cardapio</h2>
-        ${
-          visibleMealGoals.length
-            ? `<ul>${visibleMealGoals.map((goal) => `<li><strong>${escapeHtml(goal.focus)}</strong>: atual ${escapeHtml(goal.current || "-")} / meta ${escapeHtml(goal.target || "-")} ${escapeHtml(goal.unit || "")} - ${escapeHtml(goal.status)} (${Math.round(goalProgressPercent(goal))}% de progresso)</li>`).join("")}</ul>`
-            : "<p>Nenhuma meta registrada para este paciente.</p>"
-        }
+        <h2>Bioimpedancia</h2>
+        <table>${bioimpedanceRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
       </section>
       <section>
         <h2>Plano por refeicao</h2>
@@ -4373,39 +4375,17 @@ export function ReportsWorkspace() {
                   <div className="mt-4 rounded-smart border border-line bg-surface p-3">
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div>
-                        <p className="text-[13px] font-semibold text-graphite">Metas e aderencia ao cardapio</p>
+                        <p className="text-[13px] font-semibold text-graphite">Bioimpedancia</p>
                         <p className="mt-1 text-[12px] leading-5 text-graphite/65">
-                          Dados estruturados para o paciente acompanhar o objetivo, a meta combinada e o quanto ja registrou no diario.
+                          Composicao corporal de apoio para interpretar o plano alimentar e as metas energeticas.
                         </p>
                       </div>
-                      <NutritionBadge label="Aderencia" value={averageDiaryAdherence !== null ? `${averageDiaryAdherence}%` : "-"} />
+                      <NutritionBadge label="Data" value={latestBioimpedance?.date || "-"} />
                     </div>
                     <div className="mt-3 grid gap-2 md:grid-cols-3">
-                      <NutritionBadge label="Meta de aderencia" value={adherenceGoal?.target ? `${adherenceGoal.target}${adherenceGoal.unit || ""}` : "-"} />
-                      <NutritionBadge label="Ultimo diario" value={latestDiary?.adherence || "-"} />
-                      <NutritionBadge label="Total do plano" value={mealPlanTotalKcal ? formatNutrient(mealPlanTotalKcal, " kcal") : "-"} />
-                    </div>
-                    <div className="mt-3 grid gap-2">
-                      {visibleMealGoals.map((goal) => (
-                        <div className="rounded-smart border border-line bg-background p-3" key={goal.id}>
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-[12px] font-semibold text-graphite">{goal.focus}</p>
-                              <p className="mt-1 text-[12px] text-graphite/65">
-                                Atual {goal.current || "-"} / meta {goal.target || "-"} {goal.unit}
-                              </p>
-                            </div>
-                            <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${goalStatusTone(goal.status)}`}>
-                              {Math.round(goalProgressPercent(goal))}%
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      {visibleMealGoals.length === 0 ? (
-                        <p className="rounded-smart border border-line bg-background px-3 py-2 text-[12px] text-graphite/65">
-                          Nenhuma meta cadastrada para este paciente.
-                        </p>
-                      ) : null}
+                      <NutritionBadge label="Gordura" value={latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "-"} />
+                      <NutritionBadge label="Massa magra" value={latestBioimpedance?.leanMass ? `${latestBioimpedance.leanMass} kg` : "-"} />
+                      <NutritionBadge label="TMB" value={latestBioimpedance?.bmr ? `${latestBioimpedance.bmr} kcal` : "-"} />
                     </div>
                   </div>
                 ) : null}

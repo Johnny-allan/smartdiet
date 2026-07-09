@@ -4224,12 +4224,18 @@ export function ReportsWorkspace() {
   }
 
   function printLocalReport(kind: "clinical" | "meal") {
-    const popup = window.open("", "_blank", "noopener,noreferrer");
+    const popup = window.open("", "_blank", "width=900,height=1200");
     if (!popup) return;
     popup.document.write(localReportDocument(kind));
     popup.document.close();
-    popup.focus();
-    popup.print();
+    popup.onload = () => {
+      popup.focus();
+      popup.print();
+    };
+    window.setTimeout(() => {
+      popup.focus();
+      popup.print();
+    }, 250);
   }
 
   function downloadLocalReport(kind: "clinical" | "meal") {
@@ -4302,11 +4308,11 @@ export function ReportsWorkspace() {
               </button>
               <button className={secondaryButtonClass} type="button" onClick={() => downloadLocalReport(reportTab)}>
                 <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
-                Baixar resumo local
+                Baixar versao para impressao
               </button>
               <button className={secondaryButtonClass} type="button" onClick={() => printLocalReport(reportTab)}>
                 <Printer className="mr-2 h-4 w-4" aria-hidden="true" />
-                Imprimir resumo local
+                Imprimir versao para impressao
               </button>
             </div>
           </div>

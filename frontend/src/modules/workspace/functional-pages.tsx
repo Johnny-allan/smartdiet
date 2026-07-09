@@ -4054,6 +4054,24 @@ export function ReportsWorkspace() {
   const selectedGoals = store.focusGoals.filter((item) => item.patientId === selectedPatient?.id);
   const latestAssessment = selectedAssessments[0];
   const latestBioimpedance = selectedBioimpedance[0];
+  const latestDiary = selectedDiary[0];
+  const diaryAdherenceValues = selectedDiary
+    .map((entry) => {
+      const match = entry.adherence.match(/\d+(?:[,.]\d+)?/);
+      return match ? Number(match[0].replace(",", ".")) : NaN;
+    })
+    .filter(Number.isFinite);
+  const averageDiaryAdherence = diaryAdherenceValues.length
+    ? Math.round(diaryAdherenceValues.reduce((total, value) => total + value, 0) / diaryAdherenceValues.length)
+    : null;
+  const adherenceGoal = selectedGoals.find((goal) => {
+    const text = normalizeQuery(`${goal.focus} ${goal.metric}`);
+    return text.includes("aderencia");
+  });
+  const visibleMealGoals = [
+    ...(adherenceGoal ? [adherenceGoal] : []),
+    ...selectedGoals.filter((goal) => goal.id !== adherenceGoal?.id),
+  ].slice(0, 3);
   const prescriptionFoods = useMemo(() => [...tbcaFoods, ...tacoFoods].filter(hasNutrientData), []);
   const mealPlanItems = selectedPlan?.structuredItems ?? [];
   const mealPlanTotalKcal = mealPlanItems.reduce((total, item) => {
@@ -4158,16 +4176,32 @@ export function ReportsWorkspace() {
   }
 
   function localMealReportHtml() {
+    const patientRows = [
+      ["Nome", selectedPatient?.name],
+      ["Status", selectedPatient?.status],
+      ["Objetivo atual", selectedPatient?.goal || selectedAnamnesis?.mainGoal || "Nao registrado"],
+      ["Nascimento", selectedPatient?.birthDate || "Nao informado"],
+      ["Genero", selectedPatient?.gender || "Nao informado"],
+      ["Restricoes", selectedAnamnesis?.restrictions || "Sem restricoes registradas."],
+      ["Rotina alimentar", selectedAnamnesis?.routine || "Sem rotina registrada."],
+      ["Total estruturado", formatNutrient(mealPlanTotalKcal, " kcal")],
+      ["Aderencia media registrada", averageDiaryAdherence !== null ? `${averageDiaryAdherence}%` : "Sem registro no diario"],
+      ["Ultimo registro de aderencia", latestDiary ? `${latestDiary.date} - ${latestDiary.meal}: ${latestDiary.adherence || "Nao informado"}` : "Sem registro no diario"],
+    ];
     return `
       <h1>Resumo alimentar</h1>
       <p class="muted">Plano alimentar estruturado para o paciente revisar horarios, refeicoes e itens prescritos.</p>
       <section>
         <h2>Paciente</h2>
-        <table>
-          <tr><th>Nome</th><td>${escapeHtml(selectedPatient?.name)}</td></tr>
-          <tr><th>Objetivo</th><td>${escapeHtml(selectedPatient?.goal || "Nao registrado")}</td></tr>
-          <tr><th>Total estruturado</th><td>${escapeHtml(formatNutrient(mealPlanTotalKcal, " kcal"))}</td></tr>
-        </table>
+        <table>${patientRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
+      </section>
+      <section>
+        <h2>Metas e aderencia ao cardapio</h2>
+        ${
+          visibleMealGoals.length
+            ? `<ul>${visibleMealGoals.map((goal) => `<li><strong>${escapeHtml(goal.focus)}</strong>: atual ${escapeHtml(goal.current || "-")} / meta ${escapeHtml(goal.target || "-")} ${escapeHtml(goal.unit || "")} - ${escapeHtml(goal.status)} (${Math.round(goalProgressPercent(goal))}% de progresso)</li>`).join("")}</ul>`
+            : "<p>Nenhuma meta registrada para este paciente.</p>"
+        }
       </section>
       <section>
         <h2>Plano por refeicao</h2>
@@ -4332,6 +4366,46 @@ export function ReportsWorkspace() {
                   <NutritionBadge label="Bioimpedancia" value={String(selectedBioimpedance.length)} />
                   <NutritionBadge label="Diario" value={String(selectedDiary.length)} />
                 </div>
+                {reportTab === "meal" ? (
+                  <div className="mt-4 rounded-smart border border-line bg-surface p-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <p className="text-[13px] font-semibold text-graphite">Metas e aderencia ao cardapio</p>
+                        <p className="mt-1 text-[12px] leading-5 text-graphite/65">
+                          Dados estruturados para o paciente acompanhar o objetivo, a meta combinada e o quanto ja registrou no diario.
+                        </p>
+                      </div>
+                      <NutritionBadge label="Aderencia" value={averageDiaryAdherence !== null ? `${averageDiaryAdherence}%` : "-"} />
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-3">
+                      <NutritionBadge label="Meta de aderencia" value={adherenceGoal?.target ? `${adherenceGoal.target}${adherenceGoal.unit || ""}` : "-"} />
+                      <NutritionBadge label="Ultimo diario" value={latestDiary?.adherence || "-"} />
+                      <NutritionBadge label="Total do plano" value={mealPlanTotalKcal ? formatNutrient(mealPlanTotalKcal, " kcal") : "-"} />
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {visibleMealGoals.map((goal) => (
+                        <div className="rounded-smart border border-line bg-background p-3" key={goal.id}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-[12px] font-semibold text-graphite">{goal.focus}</p>
+                              <p className="mt-1 text-[12px] text-graphite/65">
+                                Atual {goal.current || "-"} / meta {goal.target || "-"} {goal.unit}
+                              </p>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${goalStatusTone(goal.status)}`}>
+                              {Math.round(goalProgressPercent(goal))}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      {visibleMealGoals.length === 0 ? (
+                        <p className="rounded-smart border border-line bg-background px-3 py-2 text-[12px] text-graphite/65">
+                          Nenhuma meta cadastrada para este paciente.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <EmptyState title="Nenhum paciente encontrado" detail="Cadastre um paciente para liberar os resumos e PDFs." />

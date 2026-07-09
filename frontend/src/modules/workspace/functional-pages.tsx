@@ -4042,6 +4042,7 @@ export function SubstitutionsWorkspace() {
 export function ReportsWorkspace() {
   const { ready, store } = useSmartDietStore();
   const [patientId, setPatientId] = useState(store.patients[0]?.id ?? "");
+  const [reportTab, setReportTab] = useState<"clinical" | "meal">("clinical");
   const [summaryStatus, setSummaryStatus] = useState<"idle" | "loading" | "ready" | "local" | "error">("idle");
   const [summary, setSummary] = useState<PatientReportSummary | null>(null);
   const selectedPatient = store.patients.find((patient) => patient.id === patientId) ?? store.patients[0];
@@ -4051,6 +4052,14 @@ export function ReportsWorkspace() {
   const selectedPlan = store.mealPlans.find((item) => item.patientId === selectedPatient?.id);
   const selectedAnamnesis = store.anamnesis.find((item) => item.patientId === selectedPatient?.id);
   const selectedGoals = store.focusGoals.filter((item) => item.patientId === selectedPatient?.id);
+  const latestAssessment = selectedAssessments[0];
+  const latestBioimpedance = selectedBioimpedance[0];
+  const prescriptionFoods = useMemo(() => [...tbcaFoods, ...tacoFoods].filter(hasNutrientData), []);
+  const mealPlanItems = selectedPlan?.structuredItems ?? [];
+  const mealPlanTotalKcal = mealPlanItems.reduce((total, item) => {
+    const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId);
+    return total + (scaledNutrient(food?.kcal, Number(item.grams)) ?? 0);
+  }, 0);
   const reportSections = [
     { label: "Anamnese", ready: Boolean(selectedAnamnesis), detail: selectedAnamnesis?.mainGoal ?? "Sem anamnese registrada." },
     { label: "Avaliacoes", ready: selectedAssessments.length > 0, detail: `${selectedAssessments.length} registro(s)` },
@@ -4102,13 +4111,141 @@ export function ReportsWorkspace() {
     window.open(apiUrl(`/patients/${patientId}/reports/meal-plan.pdf`), "_blank", "noopener,noreferrer");
   }
 
-  function printLocalReport() {
-    window.print();
+  function escapeHtml(value: string | number | undefined | null) {
+    return String(value ?? "-")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function localClinicalReportHtml() {
+    const rows = [
+      ["Nome", selectedPatient?.name],
+      ["Status", selectedPatient?.status],
+      ["Objetivo", selectedPatient?.goal || "Nao registrado"],
+      ["Nascimento", selectedPatient?.birthDate || "Nao informado"],
+      ["Genero", selectedPatient?.gender || "Nao informado"],
+      ["Peso", latestAssessment?.weight ? `${latestAssessment.weight} kg` : "Nao registrado"],
+      ["Altura", latestAssessment?.height ? `${latestAssessment.height} cm` : "Nao registrado"],
+      ["IMC", latestAssessment?.bmi || "Nao registrado"],
+      ["Gordura corporal", latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "Nao registrado"],
+      ["Massa magra", latestBioimpedance?.leanMass ? `${latestBioimpedance.leanMass} kg` : "Nao registrado"],
+      ["TMB", latestBioimpedance?.bmr ? `${latestBioimpedance.bmr} kcal` : "Nao registrado"],
+    ];
+    return `
+      <h1>Relatorio clinico</h1>
+      <p class="muted">Resumo fisico e clinico para acompanhamento do paciente.</p>
+      <section>
+        <h2>Resumo fisico</h2>
+        <table>${rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
+      </section>
+      <section>
+        <h2>Anamnese e conduta</h2>
+        <p><strong>Objetivo principal:</strong> ${escapeHtml(selectedAnamnesis?.mainGoal || selectedPatient?.goal || "Nao registrado")}</p>
+        <p><strong>Restricoes:</strong> ${escapeHtml(selectedAnamnesis?.restrictions || "Sem restricoes registradas.")}</p>
+        <p><strong>Rotina:</strong> ${escapeHtml(selectedAnamnesis?.routine || "Sem rotina registrada.")}</p>
+      </section>
+      <section>
+        <h2>Metas acompanhadas</h2>
+        ${
+          selectedGoals.length
+            ? `<ul>${selectedGoals.map((goal) => `<li><strong>${escapeHtml(goal.focus)}</strong>: ${escapeHtml(goal.current || "-")} de ${escapeHtml(goal.target || "-")} ${escapeHtml(goal.unit || "")} (${escapeHtml(goal.status)})</li>`).join("")}</ul>`
+            : "<p>Nenhuma meta registrada.</p>"
+        }
+      </section>
+    `;
+  }
+
+  function localMealReportHtml() {
+    return `
+      <h1>Resumo alimentar</h1>
+      <p class="muted">Plano alimentar estruturado para o paciente revisar horarios, refeicoes e itens prescritos.</p>
+      <section>
+        <h2>Paciente</h2>
+        <table>
+          <tr><th>Nome</th><td>${escapeHtml(selectedPatient?.name)}</td></tr>
+          <tr><th>Objetivo</th><td>${escapeHtml(selectedPatient?.goal || "Nao registrado")}</td></tr>
+          <tr><th>Total estruturado</th><td>${escapeHtml(formatNutrient(mealPlanTotalKcal, " kcal"))}</td></tr>
+        </table>
+      </section>
+      <section>
+        <h2>Plano por refeicao</h2>
+        ${requiredMeals.map((meal) => {
+          const items = mealPlanItems.filter((item) => item.meal === meal);
+          const kcal = items.reduce((total, item) => {
+            const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId);
+            return total + (scaledNutrient(food?.kcal, Number(item.grams)) ?? 0);
+          }, 0);
+          return `
+            <article>
+              <h3>${escapeHtml(meal)} <span>${escapeHtml(selectedPlan?.mealTimes?.[meal] || defaultMealTimes[meal] || "")}</span></h3>
+              <p>${escapeHtml(selectedPlan?.meals?.[meal] || "Sem orientacao textual.")}</p>
+              <p><strong>Kcal estruturadas:</strong> ${escapeHtml(kcal ? formatNutrient(kcal, " kcal") : "-")}</p>
+              ${
+                items.length
+                  ? `<ul>${items.map((item) => {
+                      const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId);
+                      return `<li>${escapeHtml(item.grams)} g - ${escapeHtml(food?.name || "Alimento")} (${escapeHtml(formatNutrient(scaledNutrient(food?.kcal, Number(item.grams)), " kcal"))})</li>`;
+                    }).join("")}</ul>`
+                  : "<p>Nenhum item estruturado nesta refeicao.</p>"
+              }
+            </article>
+          `;
+        }).join("")}
+      </section>
+    `;
+  }
+
+  function localReportDocument(kind: "clinical" | "meal") {
+    const title = kind === "clinical" ? "Relatorio clinico" : "Resumo alimentar";
+    const body = kind === "clinical" ? localClinicalReportHtml() : localMealReportHtml();
+    return `<!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(title)} - ${escapeHtml(selectedPatient?.name)}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 32px; color: #2f3742; line-height: 1.45; }
+            h1 { margin: 0 0 6px; color: #168A5A; }
+            h2 { margin: 24px 0 10px; color: #3F4652; border-bottom: 2px solid #F97316; padding-bottom: 6px; }
+            h3 { margin: 16px 0 6px; }
+            h3 span { color: #F97316; font-size: 13px; margin-left: 8px; }
+            section, article { break-inside: avoid; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #D6DAE1; padding: 9px; text-align: left; vertical-align: top; }
+            th { width: 210px; background: #F3F4F6; }
+            ul { margin-top: 8px; }
+            .muted { color: #68717d; margin-top: 0; }
+          </style>
+        </head>
+        <body>${body}</body>
+      </html>`;
+  }
+
+  function printLocalReport(kind: "clinical" | "meal") {
+    const popup = window.open("", "_blank", "noopener,noreferrer");
+    if (!popup) return;
+    popup.document.write(localReportDocument(kind));
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  }
+
+  function downloadLocalReport(kind: "clinical" | "meal") {
+    const html = localReportDocument(kind);
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${kind === "clinical" ? "relatorio-clinico" : "resumo-alimentar"}-${normalizeQuery(selectedPatient?.name ?? "paciente").replace(/\s+/g, "-")}.html`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Database} title="Relatorios" subtitle="Resumo profissional com cobertura de dados, estados claros e exportacao em PDF para pacientes persistidos." />
+      <PageHeader icon={Database} title="Relatorios" subtitle="Relatorio clinico, resumo fisico e plano alimentar estruturado para impressao ou envio ao paciente." />
       {!ready ? <StateBanner tone="loading" title="Carregando workspace" detail="Sincronizando dados locais antes de montar os relatorios." /> : null}
       <section className="grid gap-4 md:grid-cols-4">
         <SmartCard className="p-5"><p className="text-[13px] text-graphite/65">Pacientes</p><p className="mt-2 text-[28px] font-semibold">{store.patients.length}</p></SmartCard>
@@ -4139,19 +4276,35 @@ export function ReportsWorkspace() {
               <StateBanner
                 tone="error"
                 title="API indisponivel"
-                detail="Confira se o backend esta rodando em 127.0.0.1:8000 para liberar os PDFs."
+                detail={`Confira se o backend esta online e se NEXT_PUBLIC_API_BASE_URL aponta para ${API_BASE_URL}.`}
               />
             ) : null}
+            <div className="grid grid-cols-2 gap-2 rounded-smart border border-line bg-background p-1">
+              <button
+                className={`h-9 rounded-smart text-[12px] font-semibold transition duration-200 ${reportTab === "clinical" ? "bg-forest text-white" : "text-graphite hover:bg-mist hover:text-forest"}`}
+                type="button"
+                onClick={() => setReportTab("clinical")}
+              >
+                Relatorio clinico
+              </button>
+              <button
+                className={`h-9 rounded-smart text-[12px] font-semibold transition duration-200 ${reportTab === "meal" ? "bg-forest text-white" : "text-graphite hover:bg-mist hover:text-forest"}`}
+                type="button"
+                onClick={() => setReportTab("meal")}
+              >
+                Resumo alimentar
+              </button>
+            </div>
             <div className="flex flex-col gap-2">
-              <button className={primaryButtonClass} type="button" onClick={openClinicalPdf}>
+              <button className={primaryButtonClass} type="button" onClick={reportTab === "clinical" ? openClinicalPdf : openMealPlanPdfFromReports}>
                 <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-                Baixar relatorio clinico PDF
+                {reportTab === "clinical" ? "Baixar relatorio clinico PDF" : "Baixar cardapio PDF"}
               </button>
-              <button className={secondaryButtonClass} type="button" onClick={openMealPlanPdfFromReports}>
+              <button className={secondaryButtonClass} type="button" onClick={() => downloadLocalReport(reportTab)}>
                 <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
-                Baixar cardapio PDF
+                Baixar resumo local
               </button>
-              <button className={secondaryButtonClass} type="button" onClick={printLocalReport}>
+              <button className={secondaryButtonClass} type="button" onClick={() => printLocalReport(reportTab)}>
                 <Printer className="mr-2 h-4 w-4" aria-hidden="true" />
                 Imprimir resumo local
               </button>
@@ -4197,6 +4350,49 @@ export function ReportsWorkspace() {
             {reportSections.every((section) => !section.ready) ? (
               <EmptyState title="Relatorio sem conteudo clinico" detail="Preencha anamnese, avaliacoes, diario ou plano alimentar para compor o resumo." />
             ) : null}
+            {reportTab === "clinical" ? (
+              <div className="rounded-smart border border-line bg-background p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-[13px] font-semibold text-graphite">Relatorio clinico e resumo fisico</p>
+                    <p className="mt-1 text-[12px] leading-5 text-graphite/65">Conteudo voltado para avaliacao, bioimpedancia, anamnese e metas acompanhadas.</p>
+                  </div>
+                  <NutritionBadge label="IMC" value={latestAssessment?.bmi || "-"} />
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <NutritionBadge label="Peso" value={latestAssessment?.weight ? `${latestAssessment.weight} kg` : "-"} />
+                  <NutritionBadge label="Altura" value={latestAssessment?.height ? `${latestAssessment.height} cm` : "-"} />
+                  <NutritionBadge label="Gordura" value={latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "-"} />
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-smart border border-line bg-background p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-[13px] font-semibold text-graphite">Resumo alimentar estruturado</p>
+                    <p className="mt-1 text-[12px] leading-5 text-graphite/65">Mostra horarios, orientacoes e calorias dos itens estruturados do plano alimentar.</p>
+                  </div>
+                  <NutritionBadge label="kcal" value={mealPlanTotalKcal ? formatNutrient(mealPlanTotalKcal) : "-"} />
+                </div>
+                <div className="mt-4 grid gap-2">
+                  {requiredMeals.map((meal) => {
+                    const items = mealPlanItems.filter((item) => item.meal === meal);
+                    return (
+                      <div className="rounded-smart border border-line bg-surface p-3" key={meal}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[13px] font-semibold text-graphite">{meal}</p>
+                            <p className="mt-1 text-[12px] text-terracotta">{selectedPlan?.mealTimes?.[meal] || defaultMealTimes[meal]}</p>
+                          </div>
+                          <NutritionBadge label="Itens" value={String(items.length)} />
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-graphite/65">{selectedPlan?.meals?.[meal] || "Sem orientacao textual."}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </SmartCard>

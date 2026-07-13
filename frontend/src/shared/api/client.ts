@@ -97,6 +97,20 @@ export async function apiDelete(path: string): Promise<void> {
   }
 }
 
+export async function apiBlob(path: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      Accept: "application/pdf",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`SmartDiet API error: ${response.status}`);
+  }
+
+  return response.blob();
+}
+
 export function requireApiData<T>(response: ApiResponse<T>): T {
   if (response.data === null) {
     throw new Error("SmartDiet API response without data");

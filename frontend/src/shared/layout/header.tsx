@@ -13,7 +13,6 @@ const routeTitles: Record<string, string> = {
   "/anamnesis": "Anamnese",
   "/assessments": "Avaliacoes",
   "/bioimpedance": "Bioimpedancia",
-  "/foods": "Alimentos",
   "/recipes": "Receitas",
   "/meal-plans": "Plano alimentar",
   "/substitutions": "Substituicoes",
@@ -23,12 +22,11 @@ const routeTitles: Record<string, string> = {
 };
 
 const routeSearchPlaceholders: Record<string, string> = {
-  "/": "Buscar paciente, alimento ou receita",
+  "/": "Buscar paciente ou receita",
   "/patients": "Buscar paciente por nome, objetivo ou status",
   "/anamnesis": "Buscar anamnese, restricao ou objetivo",
   "/assessments": "Buscar avaliacao ou marcador clinico",
   "/bioimpedance": "Buscar registro de bioimpedancia",
-  "/foods": "Buscar alimento ou sinonimo",
   "/recipes": "Buscar receita vinculada ao paciente",
   "/meal-plans": "Buscar refeicao ou item do plano",
   "/substitutions": "Buscar substituicao alimentar",
@@ -38,16 +36,10 @@ const routeSearchPlaceholders: Record<string, string> = {
 };
 
 type WorkspaceSettings = {
-  preferBrazilianFoods: boolean;
-  compactFoodCards: boolean;
-  showFoodSodium: boolean;
   softDarkMode: boolean;
 };
 
 const defaultSettings: WorkspaceSettings = {
-  preferBrazilianFoods: true,
-  compactFoodCards: false,
-  showFoodSodium: true,
   softDarkMode: false,
 };
 
@@ -57,7 +49,6 @@ const mobileNavItems = [
   { label: "Anamnese", href: "/anamnesis" },
   { label: "Avaliacoes", href: "/assessments" },
   { label: "Bioimpedancia", href: "/bioimpedance" },
-  { label: "Alimentos", href: "/foods" },
   { label: "Receitas", href: "/recipes" },
   { label: "Plano alimentar", href: "/meal-plans" },
   { label: "Diario", href: "/diary" },
@@ -198,44 +189,10 @@ export function Header() {
                       onChange={(event) => updateSettings({ softDarkMode: event.target.checked })}
                     />
                   </label>
-                  <label className="flex items-center justify-between gap-3 rounded-smart border border-line bg-background px-3 py-2 text-[13px] font-medium text-graphite">
-                    Priorizar bases brasileiras
-                    <input
-                      checked={settings.preferBrazilianFoods}
-                      className="h-4 w-4 accent-forest"
-                      type="checkbox"
-                      onChange={(event) => updateSettings({ preferBrazilianFoods: event.target.checked })}
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-3 rounded-smart border border-line bg-background px-3 py-2 text-[13px] font-medium text-graphite">
-                    Lista compacta de alimentos
-                    <input
-                      checked={settings.compactFoodCards}
-                      className="h-4 w-4 accent-forest"
-                      type="checkbox"
-                      onChange={(event) => updateSettings({ compactFoodCards: event.target.checked })}
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-3 rounded-smart border border-line bg-background px-3 py-2 text-[13px] font-medium text-graphite">
-                    Exibir sodio na busca
-                    <input
-                      checked={settings.showFoodSodium}
-                      className="h-4 w-4 accent-forest"
-                      type="checkbox"
-                      onChange={(event) => updateSettings({ showFoodSodium: event.target.checked })}
-                    />
-                  </label>
                 </div>
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4">
                   <Link
-                    className="flex-1 rounded-smart bg-forest px-3 py-2 text-center text-[12px] font-semibold text-white hover:bg-petrol"
-                    href="/foods"
-                    onClick={() => setSettingsOpen(false)}
-                  >
-                    Alimentos
-                  </Link>
-                  <Link
-                    className="flex-1 rounded-smart border border-line bg-background px-3 py-2 text-center text-[12px] font-semibold text-forest hover:border-sage hover:bg-mist"
+                    className="block rounded-smart border border-line bg-background px-3 py-2 text-center text-[12px] font-semibold text-forest hover:border-sage hover:bg-mist"
                     href="/etl"
                     onClick={() => setSettingsOpen(false)}
                   >

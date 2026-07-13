@@ -36,6 +36,19 @@ def create_patient_plan(
     return ApiResponse(data=service.create_plan(patient_id, payload))
 
 
+@router.put(
+    "/patients/{patient_id}/meal-plans/{plan_id}",
+    response_model=ApiResponse[MealPlanRead],
+)
+def update_patient_plan(
+    patient_id: int,
+    plan_id: int,
+    payload: MealPlanCreate,
+    service: MealPlanService = Depends(get_meal_plan_service),
+) -> ApiResponse[MealPlanRead]:
+    return ApiResponse(data=service.update_plan(patient_id, plan_id, payload))
+
+
 @router.get("/meal-plans/{plan_id}", response_model=ApiResponse[MealPlanRead])
 def get_plan(plan_id: int, service: MealPlanService = Depends(get_meal_plan_service)) -> ApiResponse[MealPlanRead]:
     return ApiResponse(data=service.get_plan(plan_id))

@@ -11,7 +11,6 @@ const routes = [
   "/diary",
   "/meal-plans",
   "/reports",
-  "/foods",
   "/etl",
 ];
 

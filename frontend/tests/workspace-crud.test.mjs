@@ -30,21 +30,31 @@ test("frontend API client supports DELETE requests", () => {
   assert.match(apiClientSource, /method: "DELETE"/);
 });
 
-test("reports workspace exposes PDF and polished state actions", () => {
-  assert.match(workspaceSource, /Baixar relatorio clinico PDF/);
-  assert.match(workspaceSource, /Baixar cardapio PDF/);
+test("reports require preview before exporting complete patient data", () => {
+  assert.match(workspaceSource, /Visualizar e conferir/);
+  assert.match(workspaceSource, /Baixar resumo conferido/);
+  assert.match(workspaceSource, /Imprimir \/ salvar em PDF/);
+  assert.match(workspaceSource, /previewedReport !== reportTab/);
+  assert.match(workspaceSource, /srcDoc=\{localReportDocument\(reportTab\)\}/);
+  assert.match(workspaceSource, /apiBlob/);
   assert.match(workspaceSource, /StateBanner/);
   assert.match(workspaceSource, /EmptyState/);
-  assert.match(apiClientSource, /export function apiUrl/);
+  assert.match(apiClientSource, /export async function apiBlob/);
   assert.match(workspaceSource, /Ficha clinica completa/);
   assert.match(workspaceSource, /Receitas vinculadas/);
   assert.match(workspaceSource, /document\.body\.appendChild\(link\)/);
-  assert.match(workspaceSource, /disabled=\{reportTab === "meal" && !selectedPlan\}/);
+  assert.match(workspaceSource, /Plano alimentar atual/);
+  assert.match(workspaceSource, /Salvamento automatico por paciente/);
+  assert.doesNotMatch(workspaceSource, />Analisar plano</);
+  assert.doesNotMatch(workspaceSource, />Salvar plano alimentar</);
 });
 
-test("navigation removes unused AI route and patients expose goal charts", () => {
+test("navigation removes unused AI and foods routes while patients expose goal charts", () => {
   assert.doesNotMatch(sidebarSource, /\/ai|IA/);
   assert.doesNotMatch(headerSource, /\/ai|IA clinica/);
+  assert.doesNotMatch(sidebarSource, /\/foods|Alimentos/);
+  assert.doesNotMatch(headerSource, /\/foods|Alimentos/);
+  assert.doesNotMatch(smartSearchSource, /href:\s*["']\/foods["']/);
   assert.match(workspaceSource, /function PatientGoalCharts/);
   assert.match(workspaceSource, /Progresso medio/);
   assert.match(workspaceSource, /Metas por prioridade/);
@@ -60,6 +70,13 @@ test("etl page is an admin screen with real operational actions", () => {
   assert.match(etlSource, /Validar checklist/);
   assert.match(etlSource, /Revisar indice local/);
   assert.match(etlSource, /\/foods\/brazilian\/search\?q=arroz/);
+});
+
+test("meal plans include an evidence-informed Mediterranean template", () => {
+  assert.match(workspaceSource, /"Dieta mediterranea"/);
+  assert.match(workspaceSource, /azeite extravirgem/);
+  assert.match(workspaceSource, /grao-de-bico/);
+  assert.match(workspaceSource, /Priorizar alimentos minimamente processados/);
 });
 
 test("initial workspace ships only the requested real patient", () => {

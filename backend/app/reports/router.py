@@ -189,15 +189,37 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
         lines.append(f"Email: {patient.email}")
     if patient.phone:
         lines.append(f"Telefone: {patient.phone}")
+    if patient.gender:
+        lines.append(f"Genero: {patient.gender}")
+    if patient.notes:
+        lines.extend(_wrap_optional(f"Observacoes do cadastro: {patient.notes}"))
     lines.extend(["", "Documento de apoio profissional. Revisao humana obrigatoria antes de prescricao."])
 
     anamnesis_lines: list[str] = []
     if anamnesis:
-        anamnesis_lines.extend(_wrap_optional(anamnesis.main_goal))
-        if anamnesis.food_restrictions:
-            anamnesis_lines.extend(["Restricoes e preferencias:", *_wrap_optional(anamnesis.food_restrictions)])
-        if anamnesis.physical_activity:
-            anamnesis_lines.extend(["Atividade fisica:", *_wrap_optional(anamnesis.physical_activity)])
+        anamnesis_fields = [
+            ("Objetivo principal", anamnesis.main_goal),
+            ("Historico clinico", anamnesis.clinical_history),
+            ("Historico familiar", anamnesis.family_history),
+            ("Alergias", anamnesis.allergies),
+            ("Intolerancias", anamnesis.intolerances),
+            ("Medicamentos", anamnesis.medications),
+            ("Doencas", anamnesis.diseases),
+            ("Cirurgias", anamnesis.surgeries),
+            ("Sono", anamnesis.sleep_quality),
+            ("Estresse", anamnesis.stress_level),
+            ("Funcao intestinal", anamnesis.bowel_function),
+            ("Ingestao de agua", anamnesis.water_intake),
+            ("Alcool", anamnesis.alcohol_use),
+            ("Tabagismo", anamnesis.smoking),
+            ("Atividade fisica", anamnesis.physical_activity),
+            ("Preferencias alimentares", anamnesis.food_preferences),
+            ("Restricoes alimentares", anamnesis.food_restrictions),
+            ("Tipo de objetivo", anamnesis.objective_type),
+        ]
+        for label, value in anamnesis_fields:
+            if value:
+                anamnesis_lines.extend(_wrap_optional(f"{label}: {value}"))
     _add_section(lines, "Anamnese", anamnesis_lines)
 
     _add_section(
@@ -213,7 +235,7 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
         lines,
         "Avaliacoes fisicas",
         [
-            f"{item.date} | peso {item.weight_kg} kg | altura {item.height_cm} cm | IMC {item.bmi}"
+            f"{item.date} | peso {item.weight_kg} kg | altura {item.height_cm} cm | IMC {item.bmi} | cintura {item.waist_cm or '-'} cm | quadril {item.hip_cm or '-'} cm | gordura {item.body_fat_percent or '-'}% | {item.notes or 'Sem observacoes'}"
             for item in assessments[:6]
         ],
     )
@@ -222,7 +244,7 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
         lines,
         "Bioimpedancia",
         [
-            f"{item.date} | gordura {item.body_fat_percent or '-'}% | massa magra {item.lean_mass_kg or '-'} kg | BMR {item.basal_metabolic_rate_kcal or '-'} kcal"
+            f"{item.date} | gordura {item.body_fat_percent or '-'}% | massa gorda {item.fat_mass_kg or '-'} kg | massa magra {item.lean_mass_kg or '-'} kg | agua {item.total_body_water_l or '-'} L | visceral {item.visceral_fat_level or '-'} | TMB {item.basal_metabolic_rate_kcal or '-'} kcal | {item.notes or 'Sem observacoes'}"
             for item in bioimpedances[:6]
         ],
     )
@@ -231,10 +253,19 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
     if plans:
         plan = plans[0]
         meal_plan_lines.append(plan.title)
+        if plan.start_date or plan.end_date:
+            meal_plan_lines.append(f"Periodo: {plan.start_date or '-'} a {plan.end_date or '-'}")
         if plan.target_kcal:
             meal_plan_lines.append(f"Meta energetica: {plan.target_kcal} kcal")
+        if plan.target_protein_g:
+            meal_plan_lines.append(f"Meta de proteinas: {plan.target_protein_g} g")
+        if plan.target_carbs_g:
+            meal_plan_lines.append(f"Meta de carboidratos: {plan.target_carbs_g} g")
+        if plan.target_fat_g:
+            meal_plan_lines.append(f"Meta de gorduras: {plan.target_fat_g} g")
+        meal_plan_lines.extend(_wrap_optional(plan.notes))
         for meal in plan.meals:
-            meal_plan_lines.append(meal.meal_type)
+            meal_plan_lines.append(f"{meal.meal_type} | {meal.time.strftime('%H:%M') if meal.time else 'Horario livre'}")
             meal_plan_lines.extend(_wrap_optional(meal.notes))
             for item in meal.items:
                 meal_plan_lines.extend(_wrap_optional(f"- {item.grams} g | {item.notes or 'Item sem descricao'}"))
@@ -284,6 +315,16 @@ def patient_meal_plan_pdf(patient_id: int, db: Session = Depends(get_db)) -> Res
         "Dados do paciente",
         f"Plano: {plan.title}",
     ]
+    if patient.birth_date:
+        lines.append(f"Nascimento: {patient.birth_date}")
+    if patient.gender:
+        lines.append(f"Genero: {patient.gender}")
+    if patient.phone:
+        lines.append(f"Telefone: {patient.phone}")
+    if patient.email:
+        lines.append(f"Email: {patient.email}")
+    if patient.notes:
+        lines.extend(_wrap_optional(f"Observacoes do cadastro: {patient.notes}"))
     if anamnesis and anamnesis.main_goal:
         lines.extend(_wrap_optional(f"Objetivo alimentar: {anamnesis.main_goal}"))
     if anamnesis and anamnesis.food_restrictions:
@@ -318,7 +359,7 @@ def patient_meal_plan_pdf(patient_id: int, db: Session = Depends(get_db)) -> Res
     lines.append("")
 
     for meal in plan.meals:
-        lines.append(meal.meal_type)
+        lines.append(f"{meal.meal_type} | {meal.time.strftime('%H:%M') if meal.time else 'Horario livre'}")
         if meal.notes:
             lines.extend(wrap(meal.notes, width=90))
         for item in meal.items:

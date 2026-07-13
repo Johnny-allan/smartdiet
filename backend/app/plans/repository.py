@@ -32,15 +32,30 @@ class MealPlanRepository:
         plan = MealPlan(patient_id=patient_id, **data.model_dump(exclude={"meals"}))
         self.db.add(plan)
         self.db.flush()
-        for meal_data in data.meals:
-            meal = MealPlanMeal(plan_id=plan.id, **meal_data.model_dump(exclude={"items"}))
-            self.db.add(meal)
-            self.db.flush()
-            for item in meal_data.items:
-                self.db.add(MealPlanItem(meal_id=meal.id, **item.model_dump()))
+        self._replace_meals(plan, data)
         self.db.commit()
         self.db.refresh(plan)
         loaded_plan = self.get(plan.id)
         if loaded_plan is None:
             raise RuntimeError("Created meal plan could not be loaded")
         return loaded_plan
+
+    def update(self, plan: MealPlan, data: MealPlanCreate) -> MealPlan:
+        for field, value in data.model_dump(exclude={"meals"}).items():
+            setattr(plan, field, value)
+        plan.meals.clear()
+        self.db.flush()
+        self._replace_meals(plan, data)
+        self.db.commit()
+        loaded_plan = self.get(plan.id)
+        if loaded_plan is None:
+            raise RuntimeError("Updated meal plan could not be loaded")
+        return loaded_plan
+
+    def _replace_meals(self, plan: MealPlan, data: MealPlanCreate) -> None:
+        for meal_data in data.meals:
+            meal = MealPlanMeal(plan_id=plan.id, **meal_data.model_dump(exclude={"items"}))
+            self.db.add(meal)
+            self.db.flush()
+            for item in meal_data.items:
+                self.db.add(MealPlanItem(meal_id=meal.id, **item.model_dump()))

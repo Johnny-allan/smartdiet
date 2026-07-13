@@ -69,12 +69,18 @@ test("assessment diary and bioimpedance pages expose CRUD actions", async ({ pag
   await expect(page.locator("article").first().getByRole("button", { name: "Editar" })).toBeVisible();
 });
 
-test("reports workspace exposes PDF actions and local state", async ({ page }) => {
+test("reports workspace previews data before download and printing", async ({ page }) => {
   await page.goto("/reports");
 
   await expect(page.getByRole("heading", { name: "Relatorios", level: 2 })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Baixar relatorio clinico PDF" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Baixar cardapio PDF" })).toBeVisible();
+  const download = page.getByRole("button", { name: "Baixar resumo conferido" });
+  const print = page.getByRole("button", { name: "Imprimir / salvar em PDF" });
+  await expect(download).toBeDisabled();
+  await expect(print).toBeDisabled();
+  await page.getByRole("button", { name: "Visualizar e conferir" }).click();
+  await expect(page.getByTitle(/Pre-visualizacao do resumo clinico/)).toBeVisible();
+  await expect(download).toBeEnabled();
+  await expect(print).toBeEnabled();
   await expect(page.getByText("Paciente local da Beta")).toBeVisible();
   await expect(page.getByText("Paciente selecionado")).toBeVisible();
 });

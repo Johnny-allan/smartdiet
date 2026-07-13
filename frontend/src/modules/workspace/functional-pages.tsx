@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -31,7 +31,7 @@ import { NutritionBadge } from "@/shared/components/nutrition-badge";
 import { SmartCard } from "@/shared/components/smart-card";
 import { tacoFoods, type TacoFood } from "@/modules/foods/taco-foods";
 import { tbcaFoods } from "@/modules/foods/tbca-foods";
-import { API_BASE_URL, apiDelete, apiGet, apiPatch, apiPost, apiPut, apiUrl, requireApiData } from "@/shared/api/client";
+import { API_BASE_URL, apiBlob, apiDelete, apiGet, apiPatch, apiPost, apiPut, requireApiData } from "@/shared/api/client";
 
 type Patient = {
   id: string;
@@ -125,6 +125,7 @@ type BackendMealPlanItem = {
 type BackendMealPlanMeal = {
   id: number;
   meal_type: string;
+  time?: string | null;
   notes?: string | null;
   items: BackendMealPlanItem[];
 };
@@ -133,6 +134,10 @@ type BackendMealPlan = {
   id: number;
   patient_id: number;
   title: string;
+  target_kcal?: string | null;
+  target_protein_g?: string | null;
+  target_carbs_g?: string | null;
+  target_fat_g?: string | null;
   meals: BackendMealPlanMeal[];
 };
 
@@ -189,6 +194,7 @@ type SkinfoldKey = "chest" | "midaxillary" | "triceps" | "subscapular" | "abdomi
 type SkinfoldMeasurements = Record<SkinfoldKey, string>;
 
 type MealPlan = {
+  backendId?: string;
   patientId: string;
   meals: Record<string, string>;
   mealTimes?: Record<string, string>;
@@ -610,16 +616,31 @@ function goalToApi(goal: Partial<PatientFocusGoal> & Pick<PatientFocusGoal, "foc
 function mealPlanFromApi(plan: BackendMealPlan): MealPlan {
   const meals = Object.fromEntries(requiredMeals.map((meal) => [meal, ""]));
   const mealTimes = { ...defaultMealTimes };
+  const structuredItems: StructuredPlanItem[] = [];
   for (const meal of plan.meals) {
     const notes = meal.notes ?? "";
     const timeMatch = notes.match(/Horario:\s*([0-2]\d:[0-5]\d)/i);
-    if (timeMatch) mealTimes[meal.meal_type] = timeMatch[1];
+    if (meal.time) mealTimes[meal.meal_type] = meal.time.slice(0, 5);
+    else if (timeMatch) mealTimes[meal.meal_type] = timeMatch[1];
+    const unmatchedItemNotes: string[] = [];
+    for (const item of meal.items) {
+      const itemName = normalizeQuery(item.notes ?? "");
+      const food = [...tbcaFoods, ...tacoFoods].find((candidate) => {
+        const candidateName = normalizeQuery(candidate.name);
+        return Boolean(itemName) && (candidateName === itemName || candidateName.includes(itemName) || itemName.includes(candidateName));
+      });
+      if (food) {
+        structuredItems.push({ id: `api-plan-item-${item.id}`, meal: meal.meal_type, foodId: food.id, grams: item.grams });
+      } else {
+        unmatchedItemNotes.push(item.notes || `${item.grams} g`);
+      }
+    }
     meals[meal.meal_type] = [
       notes.replace(/Horario:\s*[0-2]\d:[0-5]\d/i, "").trim(),
-      ...meal.items.map((item) => item.notes || `${item.grams} g`),
+      ...unmatchedItemNotes,
     ].filter(Boolean).join("\n");
   }
-  return { patientId: String(plan.patient_id), meals, mealTimes };
+  return { backendId: String(plan.id), patientId: String(plan.patient_id), meals, mealTimes, structuredItems };
 }
 
 function recipeFromApi(recipe: BackendRecipe): Recipe {
@@ -752,6 +773,14 @@ const mealPlanTemplates: Record<string, Record<string, string>> = {
     Jantar: "Leguminosas, legumes, carboidrato complexo e fonte proteica vegetal.",
     Ceia: "Leite, iogurte, bebida vegetal fortificada ou fruta.",
   },
+  "Dieta mediterranea": {
+    "Cafe da manha": "Aveia ou pao integral, fruta, iogurte natural e oleaginosas. Priorizar alimentos minimamente processados.",
+    "Lanche da manha": "Fruta fresca com castanhas ou iogurte natural sem acucar.",
+    Almoco: "Vegetais variados, leguminosa, cereal integral, peixe ou frango e azeite extravirgem como principal gordura culinaria.",
+    "Lanche da tarde": "Homus com vegetais, fruta ou pao integral com azeite e ervas.",
+    Jantar: "Peixe, grao-de-bico ou lentilha com legumes, folhas e pequena porcao de cereal integral.",
+    Ceia: "Iogurte natural, fruta ou pequena porcao de oleaginosas conforme necessidade individual.",
+  },
 };
 
 const mealPlanTemplateTimes: Record<string, Record<string, string>> = {
@@ -801,6 +830,14 @@ const mealPlanTemplateTimes: Record<string, Record<string, string>> = {
     Almoco: "12:30",
     "Lanche da tarde": "16:00",
     Jantar: "19:30",
+    Ceia: "22:00",
+  },
+  "Dieta mediterranea": {
+    "Cafe da manha": "07:30",
+    "Lanche da manha": "10:30",
+    Almoco: "13:00",
+    "Lanche da tarde": "16:30",
+    Jantar: "20:00",
     Ceia: "22:00",
   },
 };
@@ -879,6 +916,19 @@ const mealPlanTemplateItems: Record<string, Array<{ meal: string; search: string
     { meal: "Jantar", search: ["lentilha"], grams: "140" },
     { meal: "Jantar", search: ["legumes"], grams: "160" },
     { meal: "Ceia", search: ["leite"], grams: "200" },
+  ],
+  "Dieta mediterranea": [
+    { meal: "Cafe da manha", search: ["aveia"], grams: "40" },
+    { meal: "Cafe da manha", search: ["banana"], grams: "100" },
+    { meal: "Lanche da manha", search: ["iogurte"], grams: "170" },
+    { meal: "Almoco", search: ["arroz", "integral"], grams: "100" },
+    { meal: "Almoco", search: ["feijao"], grams: "100" },
+    { meal: "Almoco", search: ["peixe"], grams: "140" },
+    { meal: "Almoco", search: ["salada"], grams: "150" },
+    { meal: "Lanche da tarde", search: ["castanha"], grams: "25" },
+    { meal: "Jantar", search: ["lentilha"], grams: "130" },
+    { meal: "Jantar", search: ["legumes"], grams: "180" },
+    { meal: "Ceia", search: ["maca"], grams: "100" },
   ],
 };
 
@@ -1500,7 +1550,7 @@ export function PatientsWorkspace() {
           focusGoals: [...goals.map(goalFromApi), ...current.focusGoals.filter((item) => item.patientId !== selectedId)],
           assessments: [...assessments.map(assessmentFromApi), ...current.assessments.filter((item) => item.patientId !== selectedId)],
           bioimpedance: [...bioimpedance.map(bioimpedanceFromApi), ...current.bioimpedance.filter((item) => item.patientId !== selectedId)],
-          mealPlans: [...plans.map(mealPlanFromApi), ...current.mealPlans.filter((item) => item.patientId !== selectedId)],
+          mealPlans: [...plans.slice(0, 1).map(mealPlanFromApi), ...current.mealPlans.filter((item) => item.patientId !== selectedId)],
           diary: [...diary.map(diaryFromApi), ...current.diary.filter((item) => item.patientId !== selectedId)],
           recipes: [...recipes.map(recipeFromApi), ...current.recipes.filter((item) => item.patientId !== selectedId)],
           anamnesis: anamnesis
@@ -1516,9 +1566,9 @@ export function PatientsWorkspace() {
     void loadPatientRecord();
   }, [selectedId, setStore]);
 
-  function openPatientPdf(kind: "clinical-summary" | "meal-plan") {
-    if (!selected || !hasBackendId(selected.id)) return;
-    window.open(apiUrl(`/patients/${selected.id}/reports/${kind}.pdf`), "_blank", "noopener,noreferrer");
+  function openPatientReport(kind: "clinical" | "meal") {
+    if (!selected) return;
+    window.location.assign(`/reports?patient=${encodeURIComponent(selected.id)}&tab=${kind}`);
   }
 
   function clearPatientForm() {
@@ -1808,19 +1858,15 @@ export function PatientsWorkspace() {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {hasBackendId(selected.id) ? (
-                        <>
-                          <button className={secondaryButtonClass} type="button" onClick={() => openPatientPdf("clinical-summary")}>
-                            <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-                            Relatorio clinico PDF
-                          </button>
-                          {selectedPlans.length > 0 ? (
-                            <button className={secondaryButtonClass} type="button" onClick={() => openPatientPdf("meal-plan")}>
-                              <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-                              Plano alimentar PDF
-                            </button>
-                          ) : null}
-                        </>
+                      <button className={secondaryButtonClass} type="button" onClick={() => openPatientReport("clinical")}>
+                        <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Conferir resumo clinico
+                      </button>
+                      {selectedPlans.length > 0 ? (
+                        <button className={secondaryButtonClass} type="button" onClick={() => openPatientReport("meal")}>
+                          <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Conferir resumo alimentar
+                        </button>
                       ) : null}
                     </div>
                   </div>
@@ -2252,10 +2298,7 @@ export function MealPlansWorkspace() {
   const [structuredFoodId, setStructuredFoodId] = useState(defaultBrazilianFoodId);
   const [structuredGrams, setStructuredGrams] = useState("100");
   const [productQuery, setProductQuery] = useState("");
-  const defaultStructuredItems = useMemo(
-    () => [{ id: "plan-item-1", meal: "Almoco", foodId: defaultBrazilianFoodId, grams: "100" }],
-    [],
-  );
+  const defaultStructuredItems = useMemo<StructuredPlanItem[]>(() => [], []);
   const [energyTarget, setEnergyTarget] = useState<EnergyTarget | null>(null);
   const [macroTargets, setMacroTargets] = useState<MacroTargets | null>(null);
   const [mealAnalysis, setMealAnalysis] = useState<MealPlanAnalysis | null>(null);
@@ -2264,6 +2307,9 @@ export function MealPlansWorkspace() {
   const [analysisMessage, setAnalysisMessage] = useState("");
   const [persistenceStatus, setPersistenceStatus] = useState<"idle" | "saving" | "saved" | "local" | "error">("idle");
   const [persistenceMessage, setPersistenceMessage] = useState("");
+  const [editorPatientId, setEditorPatientId] = useState(patientId);
+  const [backendSyncReadyPatientId, setBackendSyncReadyPatientId] = useState(hasBackendId(patientId) ? "" : patientId);
+  const autosaveVersion = useRef(0);
   const selectedPatient = store.patients.find((patient) => patient.id === patientId);
   const patientAssessment = store.assessments.find((assessment) => assessment.patientId === patientId);
   const patientAnamnesis = store.anamnesis.find((item) => item.patientId === patientId);
@@ -2324,46 +2370,72 @@ export function MealPlansWorkspace() {
     setMeals({ ...base, ...(plan?.meals ?? {}) });
     setMealTimes({ ...defaultMealTimes, ...(plan?.mealTimes ?? {}) });
     setStructuredItems(plan?.structuredItems ?? defaultStructuredItems);
+    setEditorPatientId(patientId);
   }, [defaultStructuredItems, patientId, store.mealPlans]);
 
   useEffect(() => {
     async function loadBackendPlans() {
-      if (!hasBackendId(patientId)) return;
+      if (!hasBackendId(patientId)) {
+        setBackendSyncReadyPatientId(patientId);
+        return;
+      }
+      setBackendSyncReadyPatientId("");
       try {
         const plans = requireApiData(await apiGet<BackendMealPlan[]>(`/patients/${patientId}/meal-plans`));
-        if (plans.length === 0) return;
-        const plan = mealPlanFromApi(plans[0]);
-        setStore((current) => ({
-          ...current,
-          mealPlans: [plan, ...current.mealPlans.filter((item) => item.patientId !== patientId)],
-        }));
+        if (plans.length > 0) {
+          const plan = mealPlanFromApi(plans[0]);
+          setStore((current) => ({
+            ...current,
+            mealPlans: [plan, ...current.mealPlans.filter((item) => item.patientId !== patientId)],
+          }));
+        }
       } catch {
         setPersistenceMessage("Cardapio local exibido. Nao foi possivel carregar cardapio salvo no backend.");
+      } finally {
+        setBackendSyncReadyPatientId(patientId);
       }
     }
 
     void loadBackendPlans();
   }, [patientId, setStore]);
 
-  async function savePlan() {
+  useEffect(() => {
+    if (!patientId || editorPatientId !== patientId || backendSyncReadyPatientId !== patientId) return;
+    const version = autosaveVersion.current + 1;
+    autosaveVersion.current = version;
+    const localPlan: MealPlan = {
+      backendId: currentPlan?.backendId,
+      patientId,
+      meals,
+      mealTimes,
+      structuredItems,
+    };
     setStore((current) => ({
       ...current,
       mealPlans: [
-        { patientId, meals, mealTimes, structuredItems },
+        localPlan,
         ...current.mealPlans.filter((plan) => plan.patientId !== patientId),
       ],
     }));
+
+    const hasPlanContent = structuredItems.length > 0 || requiredMeals.some((meal) => meals[meal]?.trim());
+    if (!currentPlan?.backendId && !hasPlanContent) {
+      setPersistenceStatus("idle");
+      setPersistenceMessage("Inclua um alimento ou uma orientacao para iniciar o salvamento automatico.");
+      return undefined;
+    }
+
     const backendPatientId = Number(patientId);
     if (!Number.isInteger(backendPatientId)) {
       setPersistenceStatus("local");
-      setPersistenceMessage("Plano salvo no workspace local. Para gravar no PostgreSQL, carregue um paciente criado pela API.");
-      return;
+      setPersistenceMessage("Alteracoes salvas automaticamente na ficha local do paciente.");
+      return undefined;
     }
 
     setPersistenceStatus("saving");
-    setPersistenceMessage("");
-    try {
-      await apiPost("/patients/" + backendPatientId + "/meal-plans", {
+    setPersistenceMessage("Salvando automaticamente...");
+    const timer = window.setTimeout(async () => {
+      const payload = {
         title: `Plano alimentar - ${selectedPatient?.name ?? "Paciente"}`,
         target_kcal: energyTarget?.target_kcal,
         target_protein_g: macroTargets?.protein_g,
@@ -2372,7 +2444,8 @@ export function MealPlansWorkspace() {
         notes: "Plano criado pelo workspace SmartDiet Beta.",
         meals: requiredMeals.map((meal) => ({
           meal_type: meal,
-          notes: [mealTimes[meal] ? `Horario: ${mealTimes[meal]}` : "", meals[meal] || ""].filter(Boolean).join("\n") || null,
+          time: mealTimes[meal] || null,
+          notes: meals[meal] || null,
           items: structuredItems
             .filter((item) => item.meal === meal)
             .map((item) => {
@@ -2385,23 +2458,45 @@ export function MealPlansWorkspace() {
               };
             }),
         })),
-      });
-      setPersistenceStatus("saved");
-      setPersistenceMessage("Plano alimentar gravado no backend.");
-    } catch {
-      setPersistenceStatus("error");
-      setPersistenceMessage("O plano foi salvo localmente, mas nao foi possivel gravar no backend.");
-    }
-  }
+      };
+      try {
+        const saved = currentPlan?.backendId
+          ? requireApiData(await apiPut<BackendMealPlan>(`/patients/${backendPatientId}/meal-plans/${currentPlan.backendId}`, payload))
+          : requireApiData(await apiPost<BackendMealPlan>(`/patients/${backendPatientId}/meal-plans`, payload));
+        if (autosaveVersion.current !== version) return;
+        setStore((current) => ({
+          ...current,
+          mealPlans: [
+            { ...localPlan, backendId: String(saved.id) },
+            ...current.mealPlans.filter((plan) => plan.patientId !== patientId),
+          ],
+        }));
+        setPersistenceStatus("saved");
+        setPersistenceMessage("Plano salvo automaticamente e disponivel na ficha e nos relatorios.");
+      } catch {
+        if (autosaveVersion.current !== version) return;
+        setPersistenceStatus("error");
+        setPersistenceMessage("Salvo na ficha local; a sincronizacao com o backend sera tentada na proxima alteracao.");
+      }
+    }, 800);
 
-  function openMealPlanPdf() {
-    if (!hasBackendId(patientId)) {
-      setPersistenceStatus("local");
-      setPersistenceMessage("Para gerar PDF pelo backend, selecione um paciente criado pela API.");
-      return;
-    }
-    window.open(apiUrl(`/patients/${patientId}/reports/meal-plan.pdf`), "_blank", "noopener,noreferrer");
-  }
+    return () => window.clearTimeout(timer);
+  }, [
+    backendSyncReadyPatientId,
+    currentPlan?.backendId,
+    editorPatientId,
+    energyTarget?.target_kcal,
+    macroTargets?.carbs_g,
+    macroTargets?.fat_g,
+    macroTargets?.protein_g,
+    mealTimes,
+    meals,
+    patientId,
+    prescriptionFoods,
+    selectedPatient?.name,
+    setStore,
+    structuredItems,
+  ]);
 
   function findFoodIdForTemplate(searchTerms: string[]) {
     const normalizedTerms = searchTerms.map(normalizeQuery);
@@ -2451,11 +2546,6 @@ export function MealPlansWorkspace() {
       ...current,
       { id: createId("plan-item"), meal: structuredMeal, foodId: food.id, grams },
     ]);
-    const line = `${formatNutrient(grams, " g")} de ${food.name}.`;
-    setMeals((current) => ({
-      ...current,
-      [structuredMeal]: `${current[structuredMeal] ? `${current[structuredMeal]}\n` : ""}${line}`,
-    }));
     setStructuredFoodId(food.id);
   }
 
@@ -2534,9 +2624,22 @@ export function MealPlansWorkspace() {
     }
   }
 
+  useEffect(() => {
+    if (!patientId || editorPatientId !== patientId || structuredItems.length === 0) {
+      setMealAnalysis(null);
+      setClinicalAlerts(null);
+      setAnalysisStatus("idle");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void analyzeStructuredPlan();
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [editorPatientId, patientId, selectedTemplate, structuredItems]);
+
   return (
     <div className="space-y-6">
-      <PageHeader icon={Salad} title="Cardapio do paciente" subtitle="Registro de refeicoes, sugestoes por objetivo e analise nutricional para revisao profissional." />
+      <PageHeader icon={Salad} title="Cardapio do paciente" subtitle="Refeicoes, horarios e alimentos salvos automaticamente na ficha individual do paciente." />
       <SmartCard className="p-5">
         <div className="mb-4 grid gap-4 xl:grid-cols-[360px_1fr]">
           <PatientSelect patients={store.patients} value={patientId} onChange={setPatientId} />
@@ -2585,7 +2688,7 @@ export function MealPlansWorkspace() {
           <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
             <div>
               <p className="text-[13px] font-semibold text-graphite">Registro de cardapio do paciente</p>
-              <p className="mt-1 text-[12px] leading-5 text-graphite/65">Resumo das refeicoes cadastradas para consulta rapida antes de salvar ou analisar.</p>
+              <p className="mt-1 text-[12px] leading-5 text-graphite/65">Resumo das refeicoes cadastradas e sincronizadas automaticamente com a ficha e os relatorios.</p>
             </div>
             <NutritionBadge label="Base" value="Brasileira" />
           </div>
@@ -2776,12 +2879,10 @@ export function MealPlansWorkspace() {
         <div className="mt-5 rounded-smart border border-line bg-background p-4">
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
             <div>
-              <p className="text-[13px] font-semibold text-graphite">Analise nutricional pelo backend</p>
-              <p className="mt-1 text-[12px] text-graphite/65">Monte itens estruturados por refeicao para calcular energia, macros, adequacao e alertas clinicos na API.</p>
+              <p className="text-[13px] font-semibold text-graphite">Alimentos e resumo nutricional automatico</p>
+              <p className="mt-1 text-[12px] text-graphite/65">Inclua os alimentos em cada refeicao. Energia, macros e alertas sao recalculados sem uma etapa manual.</p>
             </div>
-            <button className={primaryButtonClass} type="button" onClick={analyzeStructuredPlan}>
-              {analysisStatus === "loading" ? "Calculando..." : "Analisar plano"}
-            </button>
+            <NutritionBadge label="Calculo" value={analysisStatus === "loading" ? "Atualizando" : analysisStatus === "ready" ? "Atualizado" : "Automatico"} />
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-[160px_1fr_120px_120px]">
             <label className={labelClass}>
@@ -2858,19 +2959,16 @@ export function MealPlansWorkspace() {
             </div>
           ) : null}
         </div>
-        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
-          <button className={primaryButtonClass} type="button" onClick={savePlan}>
-            {persistenceStatus === "saving" ? "Salvando..." : "Salvar plano alimentar"}
-          </button>
-          <button
-            className="h-10 rounded-smart border border-line bg-background px-4 text-[14px] font-semibold text-forest transition duration-200 hover:border-sage hover:bg-mist"
-            type="button"
-            onClick={openMealPlanPdf}
-          >
-            Gerar PDF do cardapio
-          </button>
+        <div className="mt-4 rounded-smart border border-sage/70 bg-mist p-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-[13px] font-semibold text-forest">Salvamento automatico por paciente</p>
+              <p className="mt-1 text-[12px] leading-5 text-graphite/70">Nao e necessario salvar nem gerar PDF nesta pagina. Confira e exporte os resumos na aba Relatorios.</p>
+            </div>
+            <NutritionBadge label="Status" value={persistenceStatus === "saving" ? "Salvando" : persistenceStatus === "error" ? "Local" : "Salvo"} />
+          </div>
           {persistenceMessage ? (
-            <p className={`text-[13px] font-medium ${persistenceStatus === "error" ? "text-terracotta" : "text-graphite/70"}`}>
+            <p className={`mt-2 text-[13px] font-medium ${persistenceStatus === "error" ? "text-terracotta" : "text-graphite/70"}`}>
               {persistenceMessage}
             </p>
           ) : null}
@@ -4444,6 +4542,8 @@ export function ReportsWorkspace() {
   const { ready, store, setStore } = useSmartDietStore();
   const [patientId, setPatientId] = useState(store.patients[0]?.id ?? "");
   const [reportTab, setReportTab] = useState<"clinical" | "meal">("clinical");
+  const [previewedReport, setPreviewedReport] = useState<"clinical" | "meal" | null>(null);
+  const [exportStatus, setExportStatus] = useState("");
   const [summaryStatus, setSummaryStatus] = useState<"idle" | "loading" | "ready" | "local" | "error">("idle");
   const [summary, setSummary] = useState<PatientReportSummary | null>(null);
   const selectedPatient = store.patients.find((patient) => patient.id === patientId) ?? store.patients[0];
@@ -4485,6 +4585,21 @@ export function ReportsWorkspace() {
     { label: "Metas", ready: selectedGoals.length > 0, detail: `${selectedGoals.length} meta(s)` },
     { label: "Receitas", ready: selectedRecipes.length > 0, detail: `${selectedRecipes.length} receita(s)` },
   ];
+  const reportHasContent = reportTab === "clinical"
+    ? Boolean(selectedPatient)
+    : Boolean(selectedPlan && (mealPlanItems.length > 0 || requiredMeals.some((meal) => selectedPlan.meals?.[meal]?.trim())));
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedPatient = params.get("patient");
+    const requestedTab = params.get("tab");
+    if (requestedPatient && store.patients.some((patient) => patient.id === requestedPatient)) {
+      setPatientId(requestedPatient);
+    }
+    if (requestedTab === "clinical" || requestedTab === "meal") {
+      setReportTab(requestedTab);
+    }
+  }, [store.patients]);
 
   useEffect(() => {
     if (store.patients.length > 0 && !store.patients.some((patient) => patient.id === patientId)) {
@@ -4568,22 +4683,10 @@ export function ReportsWorkspace() {
     void loadSummary();
   }, [patientId]);
 
-  function openClinicalPdf() {
-    if (!hasBackendId(patientId)) {
-      setSummaryStatus("local");
-      return;
-    }
-    window.open(apiUrl(`/patients/${patientId}/reports/clinical-summary.pdf`), "_blank", "noopener,noreferrer");
-  }
-
-  function openMealPlanPdfFromReports() {
-    if (!hasBackendId(patientId)) {
-      setSummaryStatus("local");
-      return;
-    }
-    if (!selectedPlan) return;
-    window.open(apiUrl(`/patients/${patientId}/reports/meal-plan.pdf`), "_blank", "noopener,noreferrer");
-  }
+  useEffect(() => {
+    setPreviewedReport(null);
+    setExportStatus("");
+  }, [patientId, reportTab]);
 
   function escapeHtml(value: string | number | undefined | null) {
     return String(value ?? "-")
@@ -4689,6 +4792,12 @@ export function ReportsWorkspace() {
             ? `<table>${selectedDiary.map((entry) => `<tr><th>${escapeHtml(`${entry.date} - ${entry.meal}`)}</th><td>${escapeHtml(entry.description)}<br /><strong>Aderencia:</strong> ${escapeHtml(entry.adherence)}</td></tr>`).join("")}</table>`
             : "<p>Nenhum diario alimentar registrado.</p>"
         }
+      </section>
+      <section>
+        <h2>Plano alimentar atual</h2>
+        ${selectedPlan
+          ? requiredMeals.map((meal) => `<article><h3>${escapeHtml(meal)} <span>${escapeHtml(selectedPlan.mealTimes?.[meal] || defaultMealTimes[meal])}</span></h3><p>${escapeHtml(selectedPlan.meals?.[meal] || "Sem orientacao registrada.")}</p></article>`).join("")
+          : "<p>Nenhum plano alimentar registrado.</p>"}
       </section>
     `;
   }
@@ -4835,6 +4944,32 @@ export function ReportsWorkspace() {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
+  async function downloadVerifiedReport() {
+    if (previewedReport !== reportTab || !reportHasContent) return;
+    setExportStatus("Preparando o arquivo conferido...");
+    if (!hasBackendId(patientId)) {
+      downloadLocalReport(reportTab);
+      setExportStatus("Resumo completo baixado com os dados exibidos na visualizacao.");
+      return;
+    }
+    try {
+      const path = reportTab === "clinical" ? "clinical-summary.pdf" : "meal-plan.pdf";
+      const blob = await apiBlob(`/patients/${patientId}/reports/${path}`);
+      if (blob.size < 500) throw new Error("PDF vazio");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${reportTab === "clinical" ? "resumo-clinico" : "resumo-alimentar"}-${normalizeQuery(selectedPatient?.name ?? "paciente").replace(/\s+/g, "-")}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setExportStatus("PDF completo baixado com os dados do paciente selecionado.");
+    } catch {
+      setExportStatus("Nao foi possivel gerar o PDF agora. A visualizacao permanece disponivel para impressao.");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader icon={Database} title="Relatorios" subtitle="Relatorio clinico e versao para paciente com plano alimentar completo." />
@@ -4891,20 +5026,32 @@ export function ReportsWorkspace() {
               <button
                 className={`${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
                 type="button"
-                disabled={reportTab === "meal" && !selectedPlan}
-                onClick={reportTab === "clinical" ? openClinicalPdf : openMealPlanPdfFromReports}
+                disabled={!reportHasContent}
+                onClick={() => setPreviewedReport(reportTab)}
+              >
+                <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
+                Visualizar e conferir
+              </button>
+              <button
+                className={`${secondaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                type="button"
+                disabled={previewedReport !== reportTab}
+                onClick={() => void downloadVerifiedReport()}
               >
                 <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-                {reportTab === "clinical" ? "Baixar relatorio clinico PDF" : "Baixar cardapio PDF"}
+                Baixar resumo conferido
               </button>
-              <button className={secondaryButtonClass} type="button" onClick={() => downloadLocalReport(reportTab)}>
-                <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
-                Baixar versao para paciente
-              </button>
-              <button className={secondaryButtonClass} type="button" onClick={() => printLocalReport(reportTab)}>
+              <button
+                className={`${secondaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                type="button"
+                disabled={previewedReport !== reportTab}
+                onClick={() => printLocalReport(reportTab)}
+              >
                 <Printer className="mr-2 h-4 w-4" aria-hidden="true" />
-                Imprimir versao para paciente
+                Imprimir / salvar em PDF
               </button>
+              <p className="text-[12px] leading-5 text-graphite/65">A exportacao e a impressao sao liberadas somente depois da conferencia.</p>
+              {exportStatus ? <p className="text-[12px] font-medium leading-5 text-forest">{exportStatus}</p> : null}
             </div>
           </div>
           <div className="space-y-4">
@@ -4945,6 +5092,22 @@ export function ReportsWorkspace() {
             ) : (
               <EmptyState title="Nenhum paciente encontrado" detail="Cadastre um paciente para liberar os resumos e PDFs." />
             )}
+            {previewedReport === reportTab ? (
+              <div className="overflow-hidden rounded-smart border border-sage bg-surface shadow-subtle">
+                <div className="flex items-center justify-between gap-3 border-b border-line bg-mist px-4 py-3">
+                  <div>
+                    <p className="text-[13px] font-semibold text-forest">Pre-visualizacao para conferencia</p>
+                    <p className="mt-1 text-[12px] text-graphite/65">Este e o mesmo conjunto de dados usado na impressao e na exportacao.</p>
+                  </div>
+                  <NutritionBadge label="Paciente" value={selectedPatient?.name ?? "-"} />
+                </div>
+                <iframe
+                  className="h-[680px] w-full bg-white"
+                  srcDoc={localReportDocument(reportTab)}
+                  title={`Pre-visualizacao do ${reportTab === "clinical" ? "resumo clinico" : "resumo alimentar"}`}
+                />
+              </div>
+            ) : null}
             <div className="grid gap-3 md:grid-cols-2">
               {reportSections.map((section) => (
                 <article className="min-h-[104px] rounded-smart border border-line bg-background p-4" key={section.label}>

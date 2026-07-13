@@ -34,6 +34,18 @@ class MealPlanService:
 
     def create_plan(self, patient_id: int, data: MealPlanCreate) -> MealPlan:
         self._ensure_patient(patient_id)
+        self._validate_plan(patient_id, data)
+        return self.repository.create(patient_id, data)
+
+    def update_plan(self, patient_id: int, plan_id: int, data: MealPlanCreate) -> MealPlan:
+        self._ensure_patient(patient_id)
+        plan = self.repository.get(plan_id)
+        if plan is None or plan.patient_id != patient_id:
+            raise NotFoundError("Meal plan not found")
+        self._validate_plan(patient_id, data)
+        return self.repository.update(plan, data)
+
+    def _validate_plan(self, patient_id: int, data: MealPlanCreate) -> None:
         meal_names = {normalize_text(meal.meal_type) for meal in data.meals}
         required = {normalize_text(meal) for meal in REQUIRED_MEALS}
         missing = sorted(required - meal_names)
@@ -46,4 +58,3 @@ class MealPlanService:
                 recipe = self.recipes.get(item.recipe_id)
                 if recipe is None or recipe.patient_id != patient_id:
                     raise BusinessRuleError("Recipe must belong to the meal plan patient")
-        return self.repository.create(patient_id, data)

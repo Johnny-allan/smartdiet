@@ -72,6 +72,7 @@ paciente.
 ## Plano alimentar
 - `GET /api/v1/patients/{patient_id}/meal-plans`
 - `POST /api/v1/patients/{patient_id}/meal-plans`
+- `PUT /api/v1/patients/{patient_id}/meal-plans/{plan_id}`
 - `GET /api/v1/meal-plans/{plan_id}`
 
 Os endpoints de leitura retornam o plano com `meals[]` e `items[]`, incluindo

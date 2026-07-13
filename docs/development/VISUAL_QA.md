@@ -15,7 +15,6 @@ Playwright com Chromium em dois projetos:
 - `/diary`
 - `/meal-plans`
 - `/reports`
-- `/foods`
 
 As imagens ficam em:
 `frontend/test-results/visual-qa/`
@@ -24,8 +23,8 @@ As imagens ficam em:
 - Smoke visual passou em desktop e mobile.
 - Fluxos reais de UI passaram para pacientes, receitas, avaliacoes,
   bioimpedancia, diario e relatorios.
-- A tela de alimentos em mobile gera uma pagina longa por listar muitos itens,
-  mas nao apresentou sobreposicao critica nas capturas.
+- A consulta de alimentos permanece integrada ao plano alimentar e nao possui
+  uma rota principal propria.
 
 ## Comando
 ```bash

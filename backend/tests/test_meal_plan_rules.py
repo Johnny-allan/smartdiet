@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from app.core.exceptions import BusinessRuleError
+from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.plans.schemas import MealPlanCreate, MealPlanItemCreate, MealPlanMealCreate
 from app.plans.service import MealPlanService
 
@@ -14,8 +14,16 @@ class FakePatients:
 
 
 class FakeMealPlanRepository:
+    def get(self, plan_id: int) -> object | None:
+        if plan_id == 10:
+            return type("Plan", (), {"id": 10, "patient_id": 1})()
+        return None
+
     def create(self, patient_id: int, data: MealPlanCreate) -> object:
         return object()
+
+    def update(self, plan: object, data: MealPlanCreate) -> object:
+        return plan
 
 
 class FakeRecipes:
@@ -46,6 +54,20 @@ def test_meal_plan_accepts_required_meals() -> None:
     )
 
     assert service.create_plan(1, payload) is not None
+
+
+def test_meal_plan_autosave_updates_only_the_selected_patient_plan() -> None:
+    service = MealPlanService(FakeMealPlanRepository(), FakePatients(), FakeRecipes())  # type: ignore[arg-type]
+    payload = MealPlanCreate(
+        title="Plano atualizado automaticamente",
+        meals=[MealPlanMealCreate(meal_type=meal) for meal in [
+            "Cafe da manha", "Lanche da manha", "Almoco", "Lanche da tarde", "Jantar", "Ceia"
+        ]],
+    )
+
+    assert service.update_plan(1, 10, payload).patient_id == 1
+    with pytest.raises(NotFoundError, match="Meal plan not found"):
+        service.update_plan(2, 10, payload)
 
 
 def test_meal_plan_item_accepts_textual_food_note_for_local_catalog() -> None:

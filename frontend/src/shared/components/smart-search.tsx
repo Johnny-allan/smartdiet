@@ -4,9 +4,6 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { tacoFoods } from "@/modules/foods/taco-foods";
-import { tbcaFoods } from "@/modules/foods/tbca-foods";
-
 type SmartSearchProps = {
   placeholder: string;
 };
@@ -36,18 +33,6 @@ export function SmartSearch({ placeholder }: SmartSearchProps) {
         description: item.goal ?? "Paciente",
         href: "/patients",
         type: "Paciente",
-      })),
-      ...tacoFoods.slice(0, 120).map((item) => ({
-        title: item.name,
-        description: item.category,
-        href: "/foods",
-        type: "Alimento",
-      })),
-      ...tbcaFoods.map((item) => ({
-        title: item.name,
-        description: item.category,
-        href: "/foods",
-        type: "Alimento",
       })),
       ...(store.recipes ?? []).map((item) => ({
         title: item.title,

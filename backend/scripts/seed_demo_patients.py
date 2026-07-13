@@ -73,7 +73,6 @@ DEMO_PATIENTS: list[dict[str, Any]] = [
             "notes": "Perfil demo cardiovascular; conferir evolucao de cintura e pressao.",
         },
         "bioimpedance": [
-            {"date": "2026-04-10", "body_fat_percent": "38.1", "fat_mass_kg": "30.5", "lean_mass_kg": "49.5", "muscle_mass_kg": "24.9", "total_body_water_l": "35.2", "basal_metabolic_rate_kcal": "1395", "visceral_fat_level": "12", "metabolic_age": 63, "notes": "Bioimpedancia inicial do perfil cardiovascular."},
             {"date": "2026-07-10", "body_fat_percent": "36.8", "fat_mass_kg": "28.9", "lean_mass_kg": "49.5", "muscle_mass_kg": "25.6", "total_body_water_l": "36.0", "basal_metabolic_rate_kcal": "1410", "visceral_fat_level": "11", "metabolic_age": 61, "notes": "Bioimpedancia atual: reducao de gordura visceral."},
         ],
         "goals": [
@@ -106,7 +105,7 @@ DEMO_PATIENTS: list[dict[str, Any]] = [
             "meals": [
                 {"meal_type": "Cafe da manha", "time": "07:30", "notes": "Aveia, fruta e iogurte natural.", "items": [{"quantity": "40", "unit": "g", "grams": "40", "notes": "Aveia em flocos"}, {"quantity": "120", "unit": "g", "grams": "120", "notes": "Mamao"}]},
                 {"meal_type": "Lanche da manha", "time": "10:30", "notes": "Fruta e oleaginosas sem sal.", "items": [{"quantity": "100", "unit": "g", "grams": "100", "notes": "Maca"}, {"quantity": "20", "unit": "g", "grams": "20", "notes": "Castanha-do-para"}]},
-                {"meal_type": "Almoco", "time": "13:00", "notes": "Vegetais, leguminosa, cereal integral, peixe e azeite extravirgem.", "items": [{"quantity": "100", "unit": "g", "grams": "100", "notes": "Arroz integral cozido"}, {"quantity": "100", "unit": "g", "grams": "100", "notes": "Feijao carioca cozido"}, {"quantity": "130", "unit": "g", "grams": "130", "notes": "Sardinha assada"}, {"quantity": "8", "unit": "ml", "grams": "8", "notes": "Azeite de oliva extravirgem"}]},
+                {"meal_type": "Almoco", "time": "13:00", "notes": "Vegetais, leguminosa, cereal integral, peixe e azeite extravirgem.", "items": [{"quantity": "100", "unit": "g", "grams": "100", "notes": "Arroz integral cozido"}, {"quantity": "100", "unit": "g", "grams": "100", "notes": "Feijao carioca cozido"}, {"quantity": "130", "unit": "g", "grams": "130", "notes": "Sardinha assada"}, {"quantity": "8", "unit": "ml", "grams": "8", "notes": "Azeite de oliva extravirgem"}, {"quantity": "120", "unit": "g", "grams": "120", "notes": "Substituicao para Arroz integral cozido: Batata-doce cozida"}]},
                 {"meal_type": "Lanche da tarde", "time": "16:30", "notes": "Homus e vegetais crus.", "items": [{"quantity": "60", "unit": "g", "grams": "60", "notes": "Homus de grao-de-bico"}]},
                 {"meal_type": "Jantar", "time": "20:00", "notes": "Sopa de lentilha com legumes e folhas.", "items": [{"quantity": "160", "unit": "g", "grams": "160", "notes": "Lentilha cozida"}, {"quantity": "180", "unit": "g", "grams": "180", "notes": "Legumes variados"}]},
                 {"meal_type": "Ceia", "time": "22:00", "notes": "Opcional conforme fome.", "items": [{"quantity": "170", "unit": "g", "grams": "170", "notes": "Iogurte natural"}]},
@@ -137,7 +136,6 @@ DEMO_PATIENTS: list[dict[str, Any]] = [
         },
         "assessment": {"date": "2026-07-09", "weight_kg": "82.6", "height_cm": "181", "waist_cm": "82", "hip_cm": "99", "body_fat_percent": "13.8", "muscle_mass_kg": "38.4", "notes": "Perfil demo esportivo; foco em ganho gradual de massa magra."},
         "bioimpedance": [
-            {"date": "2026-03-09", "body_fat_percent": "14.5", "fat_mass_kg": "11.6", "lean_mass_kg": "68.4", "muscle_mass_kg": "36.9", "total_body_water_l": "49.8", "basal_metabolic_rate_kcal": "1810", "visceral_fat_level": "4", "metabolic_age": 25, "notes": "Bioimpedancia inicial do perfil esportivo."},
             {"date": "2026-07-09", "body_fat_percent": "13.8", "fat_mass_kg": "11.4", "lean_mass_kg": "71.2", "muscle_mass_kg": "38.4", "total_body_water_l": "51.7", "basal_metabolic_rate_kcal": "1865", "visceral_fat_level": "4", "metabolic_age": 24, "notes": "Evolucao positiva de massa magra."},
         ],
         "goals": [{"focus": "Massa muscular", "metric": "Massa muscular", "unit": "kg", "direction": "increase", "baseline_value": "36.9", "current_value": "38.4", "target_value": "40.0", "status": "Em progresso", "notes": "Evitar aumento excessivo de gordura."}],
@@ -197,7 +195,6 @@ DEMO_PATIENTS: list[dict[str, Any]] = [
         },
         "assessment": {"date": "2026-07-08", "weight_kg": "71.2", "height_cm": "158", "waist_cm": "89", "hip_cm": "103", "body_fat_percent": "34.2", "muscle_mass_kg": "24.1", "notes": "Perfil demo vegetariano; monitorar cintura e marcadores glicemicos."},
         "bioimpedance": [
-            {"date": "2026-02-08", "body_fat_percent": "35.6", "fat_mass_kg": "26.0", "lean_mass_kg": "47.0", "muscle_mass_kg": "23.5", "total_body_water_l": "33.8", "basal_metabolic_rate_kcal": "1320", "visceral_fat_level": "9", "metabolic_age": 49, "notes": "Bioimpedancia inicial do perfil vegetariano."},
             {"date": "2026-07-08", "body_fat_percent": "34.2", "fat_mass_kg": "24.4", "lean_mass_kg": "46.8", "muscle_mass_kg": "24.1", "total_body_water_l": "34.1", "basal_metabolic_rate_kcal": "1335", "visceral_fat_level": "8", "metabolic_age": 47, "notes": "Reducao gradual de gordura corporal."},
         ],
         "goals": [{"focus": "Controle glicemico", "metric": "Aderencia alimentar", "unit": "%", "direction": "increase", "baseline_value": "50", "current_value": "76", "target_value": "85", "status": "Em progresso", "notes": "Evitar bebidas acucaradas e distribuir carboidratos."}],
@@ -277,8 +274,12 @@ def seed_demo_patients() -> list[tuple[int, str, str]]:
                 assessments.create_physical(patient.id, physical_data)
 
             existing_bioimpedance = assessment_repository.list_bioimpedance(patient.id)
-            for item in profile["bioimpedance"]:
-                bio_data = BioimpedanceCreate(**item)
+            bioimpedance_data = [BioimpedanceCreate(**item) for item in profile["bioimpedance"]]
+            desired_bioimpedance_dates = {item.date for item in bioimpedance_data}
+            for existing_record in existing_bioimpedance:
+                if existing_record.date not in desired_bioimpedance_dates:
+                    assessments.delete_bioimpedance(patient.id, existing_record.id)
+            for bio_data in bioimpedance_data:
                 matching_bio = next((record for record in existing_bioimpedance if record.date == bio_data.date), None)
                 if matching_bio:
                     assessments.update_bioimpedance(patient.id, matching_bio.id, BioimpedanceUpdate(**bio_data.model_dump()))

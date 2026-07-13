@@ -4841,39 +4841,20 @@ export function ReportsWorkspace() {
   function localMealReportHtml() {
     const patientRows = [
       ["Nome", selectedPatient?.name],
-      ["Status", selectedPatient?.status],
-      ["Objetivo atual", selectedPatient?.goal || selectedAnamnesis?.mainGoal || "Nao registrado"],
-      ["Nascimento", selectedPatient?.birthDate || "Nao informado"],
-      ["Genero", selectedPatient?.gender || "Nao informado"],
-      ["Restricoes", selectedAnamnesis?.restrictions || "Sem restricoes registradas."],
-      ["Rotina alimentar", selectedAnamnesis?.routine || "Sem rotina registrada."],
-      ["Meta de aderencia ao cardapio", adherenceGoal?.target ? `${adherenceGoal.target}${adherenceGoal.unit || ""}` : "Sem meta cadastrada"],
-      ["Aderencia media registrada", averageDiaryAdherence !== null ? `${averageDiaryAdherence}%` : "Sem registro no diario"],
-      ["Ultimo registro de aderencia", latestDiary ? `${latestDiary.date} - ${latestDiary.meal}: ${latestDiary.adherence || "Nao informado"}` : "Sem registro no diario"],
-      ["Registros no diario alimentar", selectedDiary.length ? `${selectedDiary.length} registro(s)` : "Sem registros"],
-      ["Total energetico estruturado", formatNutrient(mealPlanTotalKcal, " kcal")],
-      ["Refeicoes no cardapio", `${requiredMeals.filter((meal) => selectedPlan?.meals?.[meal] || mealPlanItems.some((item) => item.meal === meal)).length} de ${requiredMeals.length}`],
-    ];
-    const mealGoalRows = [
-      ["Objetivo do plano", selectedAnamnesis?.mainGoal || selectedPatient?.goal || "Nao registrado"],
-      ["Restricoes e preferencias", selectedAnamnesis?.restrictions || "Sem restricoes registradas."],
-      ["Rotina considerada", selectedAnamnesis?.routine || "Sem rotina registrada."],
-      ["Conduta/observacoes", selectedAnamnesis?.clinicalNotes || selectedPatient?.notes || "Sem observacoes registradas."],
-      ["Meta de aderencia", adherenceGoal?.target ? `${adherenceGoal.target}${adherenceGoal.unit || ""}` : "Sem meta cadastrada"],
-      ["Aderencia media", averageDiaryAdherence !== null ? `${averageDiaryAdherence}%` : "Sem registro no diario"],
+      ["Peso", latestAssessment?.weight ? `${latestAssessment.weight} kg` : "Nao registrado"],
+      ["Altura", latestAssessment?.height ? `${latestAssessment.height} cm` : "Nao registrada"],
     ];
     const bioimpedanceRows = [
       ["Data", latestBioimpedance?.date || "Nao registrado"],
       ["Gordura corporal", latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "Nao registrado"],
       ["Massa gorda", latestBioimpedance?.fatMass ? `${latestBioimpedance.fatMass} kg` : "Nao registrado"],
       ["Massa magra", latestBioimpedance?.leanMass ? `${latestBioimpedance.leanMass} kg` : "Nao registrado"],
-      ["Agua corporal", latestBioimpedance?.water ? `${latestBioimpedance.water} L` : "Nao registrado"],
-      ["Gordura visceral", latestBioimpedance?.visceralFat || "Nao registrado"],
+      ["Massa muscular", latestBioimpedance?.muscleMass ? `${latestBioimpedance.muscleMass} kg` : "Nao registrado"],
       ["TMB", latestBioimpedance?.bmr ? `${latestBioimpedance.bmr} kcal` : "Nao registrado"],
     ];
     return `
       <h1>Resumo alimentar / Plano alimentar</h1>
-      <p class="muted">Dieta organizada a partir dos dados preenchidos pelo nutricionista para o paciente seguir e revisar.</p>
+      <p class="muted">Ficha resumida para o paciente seguir o plano prescrito.</p>
       <section>
         <h2>Dados do paciente</h2>
         <table>${patientRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
@@ -4883,32 +4864,19 @@ export function ReportsWorkspace() {
         <table>${bioimpedanceRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
       </section>
       <section>
-        <h2>Orientacoes do nutricionista</h2>
-        <table>${mealGoalRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
-      </section>
-      <section>
         <h2>Plano por refeicao</h2>
         ${requiredMeals.map((meal) => {
           const items = mealPlanItems.filter((item) => item.meal === meal);
           const substitutions = mealPlanSubstitutions.filter((item) => item.meal === meal);
-          const kcal = items.reduce((total, item) => {
-            const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId);
-            return total + (scaledNutrient(food?.kcal, Number(item.grams)) ?? 0);
-          }, 0);
+          const mealLabel = meal === "Lanche da tarde" ? "Cafe da tarde" : meal;
           return `
             <article>
-              <h3>${escapeHtml(meal)} <span>${escapeHtml(selectedPlan?.mealTimes?.[meal] || defaultMealTimes[meal] || "")}</span></h3>
-              ${
-                mealTextLines(meal).length
-                  ? `<ul>${mealTextLines(meal).map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`
-                  : "<p>Sem orientacao textual.</p>"
-              }
-              <p><strong>Kcal estruturadas:</strong> ${escapeHtml(kcal ? formatNutrient(kcal, " kcal") : "-")}</p>
+              <h3>${escapeHtml(mealLabel)} <span>${escapeHtml(selectedPlan?.mealTimes?.[meal] || defaultMealTimes[meal] || "")}</span></h3>
               ${
                 items.length
                   ? `<ul>${items.map((item) => {
                       const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId);
-                      return `<li>${escapeHtml(item.grams)} g - ${escapeHtml(food?.name || "Alimento")} (${escapeHtml(formatNutrient(scaledNutrient(food?.kcal, Number(item.grams)), " kcal"))})</li>`;
+                      return `<li>${escapeHtml(item.grams)} g - ${escapeHtml(food?.name || "Alimento")}</li>`;
                     }).join("")}</ul>`
                   : "<p>Nenhum item estruturado nesta refeicao.</p>"
               }
@@ -4924,14 +4892,6 @@ export function ReportsWorkspace() {
             </article>
           `;
         }).join("")}
-      </section>
-      <section>
-        <h2>Diario e aderencia</h2>
-        ${
-          selectedDiary.length
-            ? `<table>${selectedDiary.map((entry) => `<tr><th>${escapeHtml(`${entry.date} - ${entry.meal}`)}</th><td>${escapeHtml(entry.description)}<br /><strong>Aderencia:</strong> ${escapeHtml(entry.adherence)}</td></tr>`).join("")}</table>`
-            : "<p>Nenhum diario alimentar registrado.</p>"
-        }
       </section>
     `;
   }

@@ -11,7 +11,7 @@ def test_demo_patients_cover_three_distinct_clinical_profiles() -> None:
         "muscle_gain",
         "glycemic_control",
     }
-    assert all(len(profile["bioimpedance"]) == 2 for profile in DEMO_PATIENTS)
+    assert all(len(profile["bioimpedance"]) == 1 for profile in DEMO_PATIENTS)
     assert {profile["patient"]["full_name"] for profile in DEMO_PATIENTS} == {
         "Helena Costa QA",
         "Lucas Ferreira QA",

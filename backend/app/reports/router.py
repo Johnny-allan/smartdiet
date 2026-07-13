@@ -35,6 +35,7 @@ def _pdf_escape(value: str) -> str:
 
 
 SECTION_TITLES = {
+    "Resumo",
     "Anamnese",
     "Avaliacoes fisicas",
     "Bioimpedancia",
@@ -45,6 +46,7 @@ SECTION_TITLES = {
     "Dados do paciente",
     "Objetivo",
     "Restricoes e preferencias",
+    "Substituicoes",
 }
 
 
@@ -52,7 +54,10 @@ def _pdf_text(value: str) -> bytes:
     return _pdf_escape(value).encode("latin-1", errors="replace")
 
 
-def _build_simple_pdf(lines: list[str]) -> bytes:
+def _build_simple_pdf(
+    lines: list[str],
+    footer: str = "Documento de apoio profissional. Revisao humana obrigatoria.",
+) -> bytes:
     page_size = 38
     pages = [lines[index : index + page_size] for index in range(0, len(lines), page_size)] or [[]]
 
@@ -107,9 +112,9 @@ def _build_simple_pdf(lines: list[str]) -> bytes:
                 content.extend(b") Tj ET\n")
                 y -= 15
 
-        content.extend(
-            b"BT /F1 8 Tf 46 44 Td (Documento de apoio profissional. Revisao humana obrigatoria.) Tj ET\n"
-        )
+        content.extend(b"BT /F1 8 Tf 46 44 Td (")
+        content.extend(_pdf_text(footer))
+        content.extend(b") Tj ET\n")
         stream = bytes(content)
         page_number = len(objects) + 1
         content_number = page_number + 1
@@ -153,16 +158,6 @@ def _wrap_optional(value: object | None, width: int = 90) -> list[str]:
     if value is None or value == "":
         return []
     return wrap(str(value), width=width)
-
-
-def _extract_adherence(notes: str | None) -> str | None:
-    if not notes:
-        return None
-    for line in notes.splitlines():
-        normalized = line.lower()
-        if "aderencia" in normalized or "adherence" in normalized:
-            return line.split(":", 1)[-1].strip() if ":" in line else line.strip()
-    return None
 
 
 def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
@@ -246,7 +241,7 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
         "Bioimpedancia",
         [
             f"{item.date} | gordura {item.body_fat_percent or '-'}% | massa gorda {item.fat_mass_kg or '-'} kg | massa magra {item.lean_mass_kg or '-'} kg | agua {item.total_body_water_l or '-'} L | visceral {item.visceral_fat_level or '-'} | TMB {item.basal_metabolic_rate_kcal or '-'} kcal | {item.notes or 'Sem observacoes'}"
-            for item in bioimpedances[:6]
+            for item in bioimpedances[:1]
         ],
     )
 
@@ -293,8 +288,7 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
     return lines
 
 
-@router.get("/meal-plan.pdf")
-def patient_meal_plan_pdf(patient_id: int, db: Session = Depends(get_db)) -> Response:
+def _patient_meal_plan_lines(patient_id: int, db: Session) -> list[str]:
     patient = PatientRepository(db).get(patient_id)
     if patient is None:
         raise NotFoundError("Patient not found")
@@ -302,75 +296,70 @@ def patient_meal_plan_pdf(patient_id: int, db: Session = Depends(get_db)) -> Res
     plans = MealPlanRepository(db).list_by_patient(patient_id)
     if not plans:
         raise NotFoundError("Meal plan not found")
-    plan = plans[0]
-    anamnesis = AnamnesisRepository(db).get_by_patient(patient_id)
-    diary_entries = DiaryRepository(db).list_by_patient(patient_id)
-    bioimpedances = AssessmentRepository(db).list_bioimpedance(patient_id)
+
+    assessment_repo = AssessmentRepository(db)
+    assessments = assessment_repo.list_physical(patient_id)
+    bioimpedances = assessment_repo.list_bioimpedance(patient_id)
+    latest_assessment = assessments[0] if assessments else None
     latest_bioimpedance = bioimpedances[0] if bioimpedances else None
-    adherence_values = [value for value in (_extract_adherence(item.notes) for item in diary_entries) if value]
+    plan = plans[0]
 
     lines = [
-        "SmartDiet - Cardapio do paciente",
-        f"Paciente: {patient.full_name}",
+        "SmartDiet - Resumo alimentar",
         "",
-        "Dados do paciente",
+        "Resumo",
+        f"Paciente: {patient.full_name}",
+        f"Peso: {latest_assessment.weight_kg} kg" if latest_assessment and latest_assessment.weight_kg else "Peso: Nao registrado",
+        f"Altura: {latest_assessment.height_cm} cm" if latest_assessment and latest_assessment.height_cm else "Altura: Nao registrada",
         f"Plano: {plan.title}",
+        "",
+        "Bioimpedancia",
     ]
-    if patient.birth_date:
-        lines.append(f"Nascimento: {patient.birth_date}")
-    if patient.gender:
-        lines.append(f"Genero: {patient.gender}")
-    if patient.phone:
-        lines.append(f"Telefone: {patient.phone}")
-    if patient.email:
-        lines.append(f"Email: {patient.email}")
-    if patient.notes:
-        lines.extend(_wrap_optional(f"Observacoes do cadastro: {patient.notes}"))
-    if anamnesis and anamnesis.main_goal:
-        lines.extend(_wrap_optional(f"Objetivo alimentar: {anamnesis.main_goal}"))
-    if anamnesis and anamnesis.food_restrictions:
-        lines.extend(_wrap_optional(f"Restricoes/preferencias: {anamnesis.food_restrictions}"))
-    if anamnesis and anamnesis.food_preferences:
-        lines.extend(_wrap_optional(f"Preferencias alimentares: {anamnesis.food_preferences}"))
-    if anamnesis and anamnesis.physical_activity:
-        lines.extend(_wrap_optional(f"Rotina/atividade: {anamnesis.physical_activity}"))
-    if plan.target_kcal:
-        lines.append(f"Meta energetica do cardapio: {plan.target_kcal} kcal")
-    if plan.target_protein_g:
-        lines.append(f"Meta de proteinas: {plan.target_protein_g} g")
-    if plan.target_carbs_g:
-        lines.append(f"Meta de carboidratos: {plan.target_carbs_g} g")
-    if plan.target_fat_g:
-        lines.append(f"Meta de gorduras: {plan.target_fat_g} g")
-    lines.append(f"Registros no diario alimentar: {len(diary_entries)}")
-    lines.append(f"Aderencia registrada: {adherence_values[0] if adherence_values else 'Sem registro de aderencia'}")
-    lines.append("")
 
-    lines.append("Bioimpedancia")
     if latest_bioimpedance:
-        lines.append(f"Data: {latest_bioimpedance.date}")
-        lines.append(f"Gordura corporal: {latest_bioimpedance.body_fat_percent or '-'}%")
-        lines.append(f"Massa gorda: {latest_bioimpedance.fat_mass_kg or '-'} kg")
-        lines.append(f"Massa magra: {latest_bioimpedance.lean_mass_kg or '-'} kg")
-        lines.append(f"Agua corporal: {latest_bioimpedance.total_body_water_l or '-'} L")
-        lines.append(f"Gordura visceral: {latest_bioimpedance.visceral_fat_level or '-'}")
-        lines.append(f"TMB: {latest_bioimpedance.basal_metabolic_rate_kcal or '-'} kcal")
+        lines.extend(
+            [
+                f"Data: {latest_bioimpedance.date}",
+                f"Gordura corporal: {latest_bioimpedance.body_fat_percent or '-'}%",
+                f"Massa gorda: {latest_bioimpedance.fat_mass_kg or '-'} kg",
+                f"Massa magra: {latest_bioimpedance.lean_mass_kg or '-'} kg",
+                f"Massa muscular: {latest_bioimpedance.muscle_mass_kg or '-'} kg",
+                f"TMB: {latest_bioimpedance.basal_metabolic_rate_kcal or '-'} kcal",
+            ]
+        )
     else:
         lines.append("Sem bioimpedancia registrada.")
-    lines.append("")
 
+    lines.extend(["", "Plano alimentar"])
+    meal_labels = {"Lanche da tarde": "Cafe da tarde"}
     for meal in plan.meals:
-        lines.append(f"{meal.meal_type} | {meal.time.strftime('%H:%M') if meal.time else 'Horario livre'}")
-        if meal.notes:
-            lines.extend(wrap(meal.notes, width=90))
-        for item in meal.items:
-            item_line = f"- {item.grams} g"
-            if item.notes:
-                item_line += f" | {item.notes}"
-            lines.extend(wrap(item_line, width=90))
-        lines.append("")
+        label = meal_labels.get(meal.meal_type, meal.meal_type)
+        lines.append(f"{label} | {meal.time.strftime('%H:%M') if meal.time else 'Horario livre'}")
+        regular_items = [
+            item for item in meal.items if not (item.notes or "").lower().startswith("substituicao para ")
+        ]
+        substitutions = [
+            item for item in meal.items if (item.notes or "").lower().startswith("substituicao para ")
+        ]
+        if regular_items:
+            for item in regular_items:
+                lines.extend(_wrap_optional(f"- {item.grams} g | {item.notes or 'Alimento sem descricao'}"))
+        else:
+            lines.append("- Nenhum alimento cadastrado.")
+        if substitutions:
+            lines.append("Substituicoes")
+            for item in substitutions:
+                lines.extend(_wrap_optional(f"- {item.grams} g | {item.notes}"))
 
-    content = _build_simple_pdf(lines)
+    return lines
+
+
+@router.get("/meal-plan.pdf")
+def patient_meal_plan_pdf(patient_id: int, db: Session = Depends(get_db)) -> Response:
+    content = _build_simple_pdf(
+        _patient_meal_plan_lines(patient_id, db),
+        footer="Plano alimentar individual. Siga as orientacoes do nutricionista.",
+    )
     filename = f"cardapio-paciente-{patient_id}.pdf"
     return Response(
         content=content,

@@ -113,3 +113,54 @@ def test_clinical_download_uses_the_selected_patients_complete_saved_record(monk
     assert any("Arroz integral salvo" in line for line in lines)
     assert b"Paciente Exportacao Real" in pdf
     assert b"Arroz integral salvo" in pdf
+
+
+def test_patient_meal_plan_download_is_concise_and_uses_latest_measurements(monkeypatch) -> None:
+    patient = SimpleNamespace(
+        full_name="Paciente Resumo",
+        email="nao-deve-sair@example.com",
+        phone="11999999999",
+    )
+    assessment = SimpleNamespace(weight_kg=70, height_cm=165)
+    bio = SimpleNamespace(
+        date=date(2026, 7, 13),
+        body_fat_percent=28,
+        fat_mass_kg=19.6,
+        lean_mass_kg=50.4,
+        muscle_mass_kg=27.5,
+        total_body_water_l=35,
+        visceral_fat_level=7,
+        basal_metabolic_rate_kcal=1450,
+    )
+    meal = SimpleNamespace(
+        meal_type="Lanche da tarde",
+        time=time(16, 30),
+        items=[
+            SimpleNamespace(grams=100, notes="Banana"),
+            SimpleNamespace(grams=120, notes="Substituicao para Banana: Mamao"),
+        ],
+    )
+    plan = SimpleNamespace(title="Plano resumido", meals=[meal])
+
+    monkeypatch.setattr(reports, "PatientRepository", lambda db: SimpleNamespace(get=lambda patient_id: patient))
+    monkeypatch.setattr(reports, "MealPlanRepository", lambda db: SimpleNamespace(list_by_patient=lambda patient_id: [plan]))
+    monkeypatch.setattr(
+        reports,
+        "AssessmentRepository",
+        lambda db: SimpleNamespace(
+            list_physical=lambda patient_id: [assessment],
+            list_bioimpedance=lambda patient_id: [bio],
+        ),
+    )
+
+    lines = reports._patient_meal_plan_lines(77, object())
+    content = "\n".join(lines)
+
+    assert "Paciente: Paciente Resumo" in content
+    assert "Peso: 70 kg" in content
+    assert "Altura: 165 cm" in content
+    assert "Cafe da tarde | 16:30" in content
+    assert "- 100 g | Banana" in content
+    assert "Substituicoes\n- 120 g | Substituicao para Banana: Mamao" in content
+    assert "nao-deve-sair@example.com" not in content
+    assert "11999999999" not in content

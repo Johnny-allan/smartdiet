@@ -1,10 +1,5 @@
-import { BioimpedanceWorkspace } from "@/modules/workspace/functional-pages";
-import { AppShell } from "@/shared/layout/app-shell";
+import { redirect } from "next/navigation";
 
 export default function BioimpedancePage() {
-  return (
-    <AppShell>
-      <BioimpedanceWorkspace />
-    </AppShell>
-  );
+  redirect("/assessments");
 }

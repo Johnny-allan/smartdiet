@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 const workspaceSource = await readFile(new URL("../src/modules/workspace/functional-pages.tsx", import.meta.url), "utf8");
+const patientCareSource = await readFile(new URL("../src/modules/patient-care/patient-care-pages.tsx", import.meta.url), "utf8");
 const apiClientSource = await readFile(new URL("../src/shared/api/client.ts", import.meta.url), "utf8");
 const sidebarSource = await readFile(new URL("../src/shared/layout/sidebar.tsx", import.meta.url), "utf8");
 const headerSource = await readFile(new URL("../src/shared/layout/header.tsx", import.meta.url), "utf8");
@@ -28,6 +29,18 @@ test("workspace exposes edit and delete actions for beta clinical modules", () =
 test("frontend API client supports DELETE requests", () => {
   assert.match(apiClientSource, /export async function apiDelete/);
   assert.match(apiClientSource, /method: "DELETE"/);
+});
+
+test("patient care pages persist each tab through the patient API", () => {
+  assert.match(patientCareSource, /Salvar paciente/);
+  assert.match(patientCareSource, /Salvar anamnese/);
+  assert.match(patientCareSource, /Salvar avaliação/);
+  assert.match(patientCareSource, /Salvar plano alimentar/);
+  assert.match(patientCareSource, /assessments\/complete/);
+  assert.match(patientCareSource, /chest_skinfold_mm/);
+  assert.match(patientCareSource, /bioimpedance:/);
+  assert.match(patientCareSource, /reports\/summary/);
+  assert.doesNotMatch(patientCareSource, /localStorage|salv[oa] apenas no workspace local/i);
 });
 
 test("reports require preview before exporting complete patient data", () => {

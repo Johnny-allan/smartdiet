@@ -14,6 +14,13 @@ class PhysicalAssessmentCreate(BaseModel):
     calf_cm: Decimal | None = None
     body_fat_percent: Decimal | None = None
     muscle_mass_kg: Decimal | None = None
+    chest_skinfold_mm: Decimal | None = Field(default=None, ge=0)
+    midaxillary_skinfold_mm: Decimal | None = Field(default=None, ge=0)
+    triceps_skinfold_mm: Decimal | None = Field(default=None, ge=0)
+    subscapular_skinfold_mm: Decimal | None = Field(default=None, ge=0)
+    abdominal_skinfold_mm: Decimal | None = Field(default=None, ge=0)
+    suprailiac_skinfold_mm: Decimal | None = Field(default=None, ge=0)
+    thigh_skinfold_mm: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None
 
 
@@ -55,3 +62,13 @@ class BioimpedanceRead(BioimpedanceCreate):
     patient_id: int
     created_at: datetime
     updated_at: datetime
+
+
+class CompleteAssessmentCreate(BaseModel):
+    physical: PhysicalAssessmentCreate
+    bioimpedance: BioimpedanceCreate | None = None
+
+
+class CompleteAssessmentRead(BaseModel):
+    physical: PhysicalAssessmentRead
+    bioimpedance: BioimpedanceRead | None = None

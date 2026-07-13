@@ -24,6 +24,13 @@ class PhysicalAssessment(Base, TimestampMixin):
     calf_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
     body_fat_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
     muscle_mass_kg: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    chest_skinfold_mm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    midaxillary_skinfold_mm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    triceps_skinfold_mm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    subscapular_skinfold_mm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    abdominal_skinfold_mm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    suprailiac_skinfold_mm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    thigh_skinfold_mm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 

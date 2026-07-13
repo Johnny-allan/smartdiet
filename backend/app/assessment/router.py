@@ -6,6 +6,8 @@ from app.assessment.schemas import (
     BioimpedanceCreate,
     BioimpedanceRead,
     BioimpedanceUpdate,
+    CompleteAssessmentCreate,
+    CompleteAssessmentRead,
     PhysicalAssessmentCreate,
     PhysicalAssessmentRead,
     PhysicalAssessmentUpdate,
@@ -36,6 +38,22 @@ def create_assessment(
     service: AssessmentService = Depends(get_assessment_service),
 ) -> ApiResponse[PhysicalAssessmentRead]:
     return ApiResponse(data=service.create_physical(patient_id, payload))
+
+
+@router.post(
+    "/assessments/complete",
+    response_model=ApiResponse[CompleteAssessmentRead],
+    status_code=status.HTTP_201_CREATED,
+)
+def create_complete_assessment(
+    patient_id: int,
+    payload: CompleteAssessmentCreate,
+    service: AssessmentService = Depends(get_assessment_service),
+) -> ApiResponse[CompleteAssessmentRead]:
+    physical, bioimpedance = service.create_complete(patient_id, payload)
+    return ApiResponse(
+        data=CompleteAssessmentRead(physical=physical, bioimpedance=bioimpedance)
+    )
 
 
 @router.put("/assessments/{assessment_id}", response_model=ApiResponse[PhysicalAssessmentRead])

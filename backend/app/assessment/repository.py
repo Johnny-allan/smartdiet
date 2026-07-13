@@ -26,6 +26,20 @@ class AssessmentRepository:
         self.db.refresh(assessment)
         return assessment
 
+    def create_complete(
+        self,
+        assessment: PhysicalAssessment,
+        bioimpedance: Bioimpedance | None,
+    ) -> tuple[PhysicalAssessment, Bioimpedance | None]:
+        self.db.add(assessment)
+        if bioimpedance is not None:
+            self.db.add(bioimpedance)
+        self.db.commit()
+        self.db.refresh(assessment)
+        if bioimpedance is not None:
+            self.db.refresh(bioimpedance)
+        return assessment, bioimpedance
+
     def get_physical(self, assessment_id: int) -> PhysicalAssessment | None:
         return self.db.get(PhysicalAssessment, assessment_id)
 

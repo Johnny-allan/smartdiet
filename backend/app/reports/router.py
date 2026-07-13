@@ -19,13 +19,50 @@ router = APIRouter(prefix="/patients/{patient_id}/reports", tags=["reports"])
 
 @router.get("/summary", response_model=ApiResponse[PatientReportSummary])
 def patient_report_summary(patient_id: int, db: Session = Depends(get_db)) -> ApiResponse[PatientReportSummary]:
-    if PatientRepository(db).get(patient_id) is None:
+    patient = PatientRepository(db).get(patient_id)
+    if patient is None:
         raise NotFoundError("Patient not found")
+    assessment_repo = AssessmentRepository(db)
+    assessments = assessment_repo.list_physical(patient_id)
+    bioimpedances = assessment_repo.list_bioimpedance(patient_id)
+    anamnesis = AnamnesisRepository(db).get_by_patient(patient_id)
+    plans = MealPlanRepository(db).list_by_patient(patient_id)
+    diary = DiaryRepository(db).list_by_patient(patient_id)
+    goals = PatientGoalRepository(db).list_by_patient(patient_id)
+    latest_assessment = assessments[0] if assessments else None
+    latest_bioimpedance = bioimpedances[0] if bioimpedances else None
     return ApiResponse(
         data=PatientReportSummary(
             patient_id=patient_id,
+            patient_name=patient.full_name,
+            patient_status=patient.status,
             sections=["summary", "anamnesis", "goals", "assessments", "bioimpedance", "meal_plan", "recipes", "diary"],
             export_pdf_available=True,
+            main_goal=anamnesis.main_goal if anamnesis else None,
+            clinical_history=anamnesis.clinical_history if anamnesis else None,
+            food_restrictions=anamnesis.food_restrictions if anamnesis else None,
+            latest_weight_kg=str(latest_assessment.weight_kg) if latest_assessment else None,
+            latest_bmi=str(latest_assessment.bmi) if latest_assessment else None,
+            latest_body_fat_percent=(
+                str(latest_bioimpedance.body_fat_percent)
+                if latest_bioimpedance and latest_bioimpedance.body_fat_percent is not None
+                else str(latest_assessment.body_fat_percent)
+                if latest_assessment and latest_assessment.body_fat_percent is not None
+                else None
+            ),
+            latest_assessment_date=(
+                str(latest_assessment.date)
+                if latest_assessment
+                else str(latest_bioimpedance.date)
+                if latest_bioimpedance
+                else None
+            ),
+            active_meal_plan=plans[0].title if plans else None,
+            assessment_count=len(assessments),
+            bioimpedance_count=len(bioimpedances),
+            meal_plan_count=len(plans),
+            diary_count=len(diary),
+            goal_count=len(goals),
         )
     )
 
@@ -160,6 +197,21 @@ def _wrap_optional(value: object | None, width: int = 90) -> list[str]:
     return wrap(str(value), width=width)
 
 
+def _seven_skinfold_sum(item: object) -> object:
+    fields = (
+        "chest_skinfold_mm",
+        "midaxillary_skinfold_mm",
+        "triceps_skinfold_mm",
+        "subscapular_skinfold_mm",
+        "abdominal_skinfold_mm",
+        "suprailiac_skinfold_mm",
+        "thigh_skinfold_mm",
+    )
+    values = [getattr(item, field, None) for field in fields]
+    measured = [value for value in values if value is not None]
+    return sum(measured) if measured else "-"
+
+
 def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
     patient = PatientRepository(db).get(patient_id)
     if patient is None:
@@ -231,7 +283,7 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
         lines,
         "Avaliacoes fisicas",
         [
-            f"{item.date} | peso {item.weight_kg} kg | altura {item.height_cm} cm | IMC {item.bmi} | cintura {item.waist_cm or '-'} cm | quadril {item.hip_cm or '-'} cm | gordura {item.body_fat_percent or '-'}% | {item.notes or 'Sem observacoes'}"
+            f"{item.date} | peso {item.weight_kg} kg | altura {item.height_cm} cm | IMC {item.bmi} | cintura {item.waist_cm or '-'} cm | quadril {item.hip_cm or '-'} cm | gordura {item.body_fat_percent or '-'}% | 7 dobras: {_seven_skinfold_sum(item)} mm | {item.notes or 'Sem observacoes'}"
             for item in assessments[:6]
         ],
     )

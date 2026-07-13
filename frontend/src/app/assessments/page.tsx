@@ -1,10 +1,10 @@
-import { AssessmentsWorkspace } from "@/modules/workspace/functional-pages";
+import { AssessmentsRecordPage } from "@/modules/patient-care/patient-care-pages";
 import { AppShell } from "@/shared/layout/app-shell";
 
 export default function AssessmentsPage() {
   return (
     <AppShell>
-      <AssessmentsWorkspace />
+      <AssessmentsRecordPage />
     </AppShell>
   );
 }

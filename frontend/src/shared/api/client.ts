@@ -6,6 +6,12 @@ export type ApiResponse<T> = {
   errors: Array<Record<string, unknown>>;
 };
 
+export class ApiError extends Error {
+  constructor(public readonly status: number) {
+    super(`SmartDiet API error: ${status}`);
+  }
+}
+
 export async function apiGet<T>(path: string): Promise<ApiResponse<T>> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
@@ -14,7 +20,7 @@ export async function apiGet<T>(path: string): Promise<ApiResponse<T>> {
   });
 
   if (!response.ok) {
-    throw new Error(`SmartDiet API error: ${response.status}`);
+    throw new ApiError(response.status);
   }
 
   return response.json() as Promise<ApiResponse<T>>;
@@ -38,7 +44,7 @@ export async function apiPost<TResponse, TPayload = unknown>(
   });
 
   if (!response.ok) {
-    throw new Error(`SmartDiet API error: ${response.status}`);
+    throw new ApiError(response.status);
   }
 
   return response.json() as Promise<ApiResponse<TResponse>>;
@@ -58,7 +64,7 @@ export async function apiPut<TResponse, TPayload = unknown>(
   });
 
   if (!response.ok) {
-    throw new Error(`SmartDiet API error: ${response.status}`);
+    throw new ApiError(response.status);
   }
 
   return response.json() as Promise<ApiResponse<TResponse>>;
@@ -78,7 +84,7 @@ export async function apiPatch<TResponse, TPayload = unknown>(
   });
 
   if (!response.ok) {
-    throw new Error(`SmartDiet API error: ${response.status}`);
+    throw new ApiError(response.status);
   }
 
   return response.json() as Promise<ApiResponse<TResponse>>;
@@ -93,7 +99,7 @@ export async function apiDelete(path: string): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error(`SmartDiet API error: ${response.status}`);
+    throw new ApiError(response.status);
   }
 }
 
@@ -105,7 +111,7 @@ export async function apiBlob(path: string): Promise<Blob> {
   });
 
   if (!response.ok) {
-    throw new Error(`SmartDiet API error: ${response.status}`);
+    throw new ApiError(response.status);
   }
 
   return response.blob();

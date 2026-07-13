@@ -33,6 +33,17 @@ Execute antes de expor ambiente persistente:
 docker compose exec backend alembic upgrade head
 ```
 
+O container do backend tambem executa `alembic upgrade head` ao iniciar. Assim,
+um deploy novo aplica as alteracoes de prontuario antes de liberar a API.
+
+## Dados acessiveis em qualquer computador
+- O frontend publicado deve definir `NEXT_PUBLIC_API_BASE_URL` com a URL HTTPS
+  da API publicada, sempre terminando em `/api/v1`.
+- A API publicada deve usar uma unica `DATABASE_URL` de PostgreSQL persistente.
+- `CORS_ORIGINS` deve conter apenas o dominio HTTPS do frontend publicado.
+- Dados clinicos nunca usam `localStorage`; as telas de prontuario confirmam o
+  salvamento somente depois da resposta do banco de dados.
+
 ## Checklist de producao
 - Trocar `SECRET_KEY`.
 - Definir `AUTH_ENABLED=true` quando login real estiver implementado.

@@ -3,6 +3,7 @@ from app.assessment.repository import AssessmentRepository
 from app.assessment.schemas import (
     BioimpedanceCreate,
     BioimpedanceUpdate,
+    CompleteAssessmentCreate,
     PhysicalAssessmentCreate,
     PhysicalAssessmentUpdate,
 )
@@ -33,6 +34,22 @@ class AssessmentService:
         return self.repository.create_physical(
             PhysicalAssessment(patient_id=patient_id, bmi=bmi, **data.model_dump())
         )
+
+    def create_complete(
+        self, patient_id: int, data: CompleteAssessmentCreate
+    ) -> tuple[PhysicalAssessment, Bioimpedance | None]:
+        self._ensure_patient(patient_id)
+        try:
+            bmi = calculate_bmi(data.physical.weight_kg, data.physical.height_cm)
+        except ValueError as exc:
+            raise BusinessRuleError(str(exc)) from exc
+        physical = PhysicalAssessment(patient_id=patient_id, bmi=bmi, **data.physical.model_dump())
+        bioimpedance = (
+            Bioimpedance(patient_id=patient_id, **data.bioimpedance.model_dump())
+            if data.bioimpedance is not None
+            else None
+        )
+        return self.repository.create_complete(physical, bioimpedance)
 
     def update_physical(
         self, patient_id: int, assessment_id: int, data: PhysicalAssessmentUpdate

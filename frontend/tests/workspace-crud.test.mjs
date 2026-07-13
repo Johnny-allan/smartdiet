@@ -75,7 +75,7 @@ test("initial workspace ships only the requested real patient", () => {
   assert.match(workspaceSource, /Resumo alimentar \/ Plano alimentar/);
   assert.match(workspaceSource, /Orientacoes do nutricionista/);
   assert.match(workspaceSource, /Plano por refeicao/);
-  assert.match(workspaceSource, /Preparos de apoio/);
+  assert.doesNotMatch(workspaceSource, /Preparos de apoio/);
   assert.match(workspaceSource, /structuredItems/);
   assert.match(workspaceSource, /Manutencao do paciente/);
   assert.match(workspaceSource, /smartdiet-gordeli-seeded/);

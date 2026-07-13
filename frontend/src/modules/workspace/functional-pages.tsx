@@ -479,7 +479,7 @@ function genderToSex(gender: string) {
 
 function parseAssessmentNotes(notes: string | null | undefined) {
   const value = notes ?? "";
-  const markerPattern = /\[DOBRAS_7\](.*?)\[\/DOBRAS_7\]/s;
+  const markerPattern = /\[DOBRAS_7\]([\s\S]*?)\[\/DOBRAS_7\]/;
   const match = value.match(markerPattern);
   if (!match) return { cleanNotes: value, skinfolds: undefined as SkinfoldMeasurements | undefined };
 

@@ -134,15 +134,15 @@ export default function EtlPage() {
               </div>
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-smart border border-line">
-              <div className="grid grid-cols-[0.8fr_0.7fr_0.7fr_1.2fr] bg-background px-4 py-3 text-[12px] font-semibold uppercase text-graphite/60">
+            <div className="smart-scrollbar mt-5 overflow-x-auto rounded-smart border border-line">
+              <div className="grid min-w-[620px] grid-cols-[0.8fr_0.7fr_0.7fr_1.2fr] bg-background px-4 py-3 text-[12px] font-semibold uppercase text-graphite/60">
                 <span>Fonte</span>
                 <span>Status</span>
                 <span>Itens</span>
                 <span>Licenca</span>
               </div>
               {sources.map((source) => (
-                <div className="grid grid-cols-[0.8fr_0.7fr_0.7fr_1.2fr] border-t border-line px-4 py-3 text-[13px] text-graphite" key={source.name}>
+                <div className="grid min-w-[620px] grid-cols-[0.8fr_0.7fr_0.7fr_1.2fr] border-t border-line px-4 py-3 text-[13px] text-graphite" key={source.name}>
                   <strong>{source.name}</strong>
                   <span className={`font-semibold ${source.tone}`}>{source.status}</span>
                   <span>{source.items}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -17,7 +17,6 @@ import {
   Loader2,
   NotebookTabs,
   Printer,
-  Repeat2,
   Scale,
   Salad,
   Star,
@@ -29,7 +28,7 @@ import {
 
 import { NutritionBadge } from "@/shared/components/nutrition-badge";
 import { SmartCard } from "@/shared/components/smart-card";
-import { tacoFoods, type TacoFood } from "@/modules/foods/taco-foods";
+import { type TacoFood } from "@/modules/foods/taco-foods";
 import { tbcaFoods } from "@/modules/foods/tbca-foods";
 import { API_BASE_URL, apiBlob, apiDelete, apiGet, apiPatch, apiPost, apiPut, requireApiData } from "@/shared/api/client";
 
@@ -199,11 +198,20 @@ type MealPlan = {
   meals: Record<string, string>;
   mealTimes?: Record<string, string>;
   structuredItems?: StructuredPlanItem[];
+  substitutions?: StructuredPlanSubstitution[];
 };
 
 type StructuredPlanItem = {
   id: string;
   meal: string;
+  foodId: string;
+  grams: string;
+};
+
+type StructuredPlanSubstitution = {
+  id: string;
+  meal: string;
+  referenceFoodId: string;
   foodId: string;
   grams: string;
 };
@@ -319,15 +327,6 @@ type MacroTargets = {
   fat_percent: string;
 };
 
-type EquivalentSubstitution = {
-  strategy: string;
-  reference_grams: string;
-  candidate_grams: string;
-  reference_totals: NutrientTotals;
-  candidate_totals: NutrientTotals;
-  delta: NutrientTotals;
-};
-
 type ClinicalAlerts = {
   alerts: Array<{ code: string; severity: "info" | "warning" | "critical"; message: string }>;
 };
@@ -400,8 +399,12 @@ function normalizeQuery(value: string) {
     .toLowerCase();
 }
 
+function normalizeFoodKey(value: string) {
+  return normalizeQuery(value).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
 const defaultBrazilianFoodId =
-  tbcaFoods.find((food) => normalizeQuery(food.name).includes("arroz") && food.kcal !== null)?.id ?? tbcaFoods[0]?.id ?? "taco-3";
+  tbcaFoods.find((food) => normalizeQuery(food.name).includes("arroz") && food.kcal !== null)?.id ?? tbcaFoods[0]?.id ?? "";
 
 function hasNutrientData(food: TacoFood) {
   return food.kcal !== null || food.protein !== null || food.carbs !== null || food.fat !== null;
@@ -617,6 +620,7 @@ function mealPlanFromApi(plan: BackendMealPlan): MealPlan {
   const meals = Object.fromEntries(requiredMeals.map((meal) => [meal, ""]));
   const mealTimes = { ...defaultMealTimes };
   const structuredItems: StructuredPlanItem[] = [];
+  const substitutions: StructuredPlanSubstitution[] = [];
   for (const meal of plan.meals) {
     const notes = meal.notes ?? "";
     const timeMatch = notes.match(/Horario:\s*([0-2]\d:[0-5]\d)/i);
@@ -625,7 +629,24 @@ function mealPlanFromApi(plan: BackendMealPlan): MealPlan {
     const unmatchedItemNotes: string[] = [];
     for (const item of meal.items) {
       const itemName = normalizeQuery(item.notes ?? "");
-      const food = [...tbcaFoods, ...tacoFoods].find((candidate) => {
+      const substitutionMatch = (item.notes ?? "").match(/^Substituicao para (.+?):\s*(.+)$/i);
+      if (substitutionMatch) {
+        const referenceName = normalizeFoodKey(substitutionMatch[1]);
+        const candidateName = normalizeFoodKey(substitutionMatch[2]);
+        const referenceFood = tbcaFoods.find((candidate) => normalizeFoodKey(candidate.name).includes(referenceName) || referenceName.includes(normalizeFoodKey(candidate.name)));
+        const candidateFood = tbcaFoods.find((candidate) => normalizeFoodKey(candidate.name).includes(candidateName) || candidateName.includes(normalizeFoodKey(candidate.name)));
+        if (referenceFood && candidateFood) {
+          substitutions.push({
+            id: `api-plan-substitution-${item.id}`,
+            meal: meal.meal_type,
+            referenceFoodId: referenceFood.id,
+            foodId: candidateFood.id,
+            grams: item.grams,
+          });
+          continue;
+        }
+      }
+      const food = tbcaFoods.find((candidate) => {
         const candidateName = normalizeQuery(candidate.name);
         return Boolean(itemName) && (candidateName === itemName || candidateName.includes(itemName) || itemName.includes(candidateName));
       });
@@ -640,7 +661,7 @@ function mealPlanFromApi(plan: BackendMealPlan): MealPlan {
       ...unmatchedItemNotes,
     ].filter(Boolean).join("\n");
   }
-  return { backendId: String(plan.id), patientId: String(plan.patient_id), meals, mealTimes, structuredItems };
+  return { backendId: String(plan.id), patientId: String(plan.patient_id), meals, mealTimes, structuredItems, substitutions };
 }
 
 function recipeFromApi(recipe: BackendRecipe): Recipe {
@@ -1204,17 +1225,17 @@ function mergeRequestedInitialPatient(store: Store): Store {
 }
 
 const inputClass =
-  "h-10 w-full rounded-smart border border-line bg-surface px-3 text-[14px] text-graphite transition duration-200 placeholder:text-graphite/45 hover:border-sage focus:border-petrol";
+  "h-11 min-w-0 w-full rounded-smart border border-line bg-surface px-3 text-[16px] text-graphite transition duration-200 placeholder:text-graphite/45 hover:border-sage focus:border-petrol sm:h-10 sm:text-[14px]";
 const textareaClass =
-  "min-h-[92px] w-full rounded-smart border border-line bg-surface px-3 py-2 text-[14px] text-graphite transition duration-200 placeholder:text-graphite/45 hover:border-sage focus:border-petrol";
-const labelClass = "space-y-1 text-[13px] font-medium text-graphite";
+  "min-h-[104px] min-w-0 w-full rounded-smart border border-line bg-surface px-3 py-2 text-[16px] text-graphite transition duration-200 placeholder:text-graphite/45 hover:border-sage focus:border-petrol sm:min-h-[92px] sm:text-[14px]";
+const labelClass = "min-w-0 space-y-1 text-[13px] font-medium text-graphite";
 const patientGenderOptions = ["Masculino", "Feminino"];
 const primaryButtonClass =
-  "inline-flex h-10 items-center justify-center rounded-smart bg-forest px-4 text-[14px] font-semibold text-white shadow-subtle transition duration-200 hover:bg-petrol";
+  "inline-flex min-h-11 w-full items-center justify-center rounded-smart bg-forest px-4 py-2 text-[14px] font-semibold text-white shadow-subtle transition duration-200 hover:bg-petrol sm:min-h-10 sm:w-auto";
 const secondaryButtonClass =
-  "inline-flex h-10 items-center justify-center rounded-smart border border-line bg-background px-4 text-[14px] font-semibold text-graphite transition duration-200 hover:border-sage hover:bg-mist hover:text-forest";
+  "inline-flex min-h-11 w-full items-center justify-center rounded-smart border border-line bg-background px-4 py-2 text-[14px] font-semibold text-graphite transition duration-200 hover:border-sage hover:bg-mist hover:text-forest sm:min-h-10 sm:w-auto";
 const dangerButtonClass =
-  "inline-flex h-10 items-center justify-center rounded-smart border border-terracotta/30 bg-terracotta/10 px-4 text-[14px] font-semibold text-terracotta transition duration-200 hover:border-terracotta hover:bg-terracotta hover:text-white";
+  "inline-flex min-h-11 w-full items-center justify-center rounded-smart border border-terracotta/30 bg-terracotta/10 px-4 py-2 text-[14px] font-semibold text-terracotta transition duration-200 hover:border-terracotta hover:bg-terracotta hover:text-white sm:min-h-10 sm:w-auto";
 
 function createId(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -1405,10 +1426,10 @@ function PageHeader({
   icon: typeof Users;
 }) {
   return (
-    <section className="flex flex-col justify-between gap-4 rounded-smart border border-line bg-surface p-6 shadow-subtle md:flex-row md:items-center">
+    <section className="flex min-w-0 flex-col justify-between gap-4 rounded-smart border border-line bg-surface p-4 shadow-subtle sm:p-6 md:flex-row md:items-center">
       <div className="min-w-0">
         <p className="text-[13px] font-semibold text-forest">Workspace funcional</p>
-        <h2 className="mt-1 text-[28px] font-semibold leading-9 text-graphite">{title}</h2>
+        <h2 className="mt-1 break-words text-[24px] font-semibold leading-8 text-graphite sm:text-[28px] sm:leading-9">{title}</h2>
         <p className="mt-2 max-w-3xl text-[14px] leading-6 text-graphite/70">{subtitle}</p>
       </div>
       <div className="grid h-12 w-12 shrink-0 place-items-center rounded-smart bg-mist text-forest">
@@ -1763,9 +1784,13 @@ export function PatientsWorkspace() {
     <div className="space-y-6">
       <PageHeader icon={Users} title="Pacientes" subtitle="Cadastro, focos clinicos, metas e acompanhamento do que o paciente ja bateu." />
       <section className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-        <SmartCard className="p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-[16px] font-semibold text-graphite">{editingPatientId ? "Editar paciente" : "Novo paciente"}</h3>
+        <SmartCard className="min-w-0 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-forest">Dados do paciente</p>
+              <h3 className="mt-1 text-[18px] font-semibold text-graphite">{editingPatientId ? "Editar paciente" : "Novo paciente"}</h3>
+              <p className="mt-1 text-[13px] leading-5 text-graphite/65">Informacoes pessoais e objetivo principal do acompanhamento.</p>
+            </div>
             {editingPatientId ? (
               <button className={secondaryButtonClass} type="button" onClick={clearPatientForm}>
                 <X className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -1795,14 +1820,16 @@ export function PatientsWorkspace() {
             </div>
             <label className={labelClass}>Objetivo<input className={inputClass} value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} /></label>
             <label className={labelClass}>Observacoes<textarea className={textareaClass} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
-            <button className={primaryButtonClass} type="button" onClick={savePatient}>
-              {editingPatientId ? "Salvar alteracoes" : "Cadastrar paciente"}
-            </button>
-            {saveMessage ? <p className="text-[13px] font-medium text-graphite/70">{saveMessage}</p> : null}
+            <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <button className={primaryButtonClass} type="button" onClick={savePatient}>
+                {editingPatientId ? "Salvar alteracoes" : "Cadastrar paciente"}
+              </button>
+              {saveMessage ? <p className="text-[13px] font-medium leading-5 text-graphite/70">{saveMessage}</p> : null}
+            </div>
           </div>
         </SmartCard>
 
-        <SmartCard className="p-5">
+        <SmartCard className="min-w-0 p-4 sm:p-5">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-[16px] font-semibold text-graphite">Perfil do paciente</h3>
             <span className="rounded-smart bg-mist px-3 py-1 text-[12px] font-semibold text-forest">{store.patients.length} pacientes</span>
@@ -2290,15 +2317,14 @@ export function MealPlansWorkspace() {
   const [patientId, setPatientId] = useState(store.patients[0]?.id ?? "");
   const [selectedTemplate, setSelectedTemplate] = useState("Ganho de massa magra");
   const [selectedSubMeal, setSelectedSubMeal] = useState("Almoco");
-  const prescriptionFoods = useMemo(() => [...tbcaFoods, ...tacoFoods].filter(hasNutrientData), []);
-  const fallbackFood = prescriptionFoods[0] ?? tacoFoods[0];
+  const prescriptionFoods = useMemo(() => tbcaFoods.filter(hasNutrientData), []);
+  const fallbackFood = prescriptionFoods[0];
   const [referenceFoodId, setReferenceFoodId] = useState(defaultBrazilianFoodId);
   const [referenceGrams, setReferenceGrams] = useState("100");
   const [structuredMeal, setStructuredMeal] = useState("Almoco");
-  const [structuredFoodId, setStructuredFoodId] = useState(defaultBrazilianFoodId);
   const [structuredGrams, setStructuredGrams] = useState("100");
   const [productQuery, setProductQuery] = useState("");
-  const defaultStructuredItems = useMemo<StructuredPlanItem[]>(() => [], []);
+  const [productCategory, setProductCategory] = useState("Todas");
   const [energyTarget, setEnergyTarget] = useState<EnergyTarget | null>(null);
   const [macroTargets, setMacroTargets] = useState<MacroTargets | null>(null);
   const [mealAnalysis, setMealAnalysis] = useState<MealPlanAnalysis | null>(null);
@@ -2309,7 +2335,9 @@ export function MealPlansWorkspace() {
   const [persistenceMessage, setPersistenceMessage] = useState("");
   const [editorPatientId, setEditorPatientId] = useState(patientId);
   const [backendSyncReadyPatientId, setBackendSyncReadyPatientId] = useState(hasBackendId(patientId) ? "" : patientId);
-  const autosaveVersion = useRef(0);
+  const analysisVersion = useRef(0);
+  const activePatientId = useRef(patientId);
+  const mealPlansSnapshot = useRef(store.mealPlans);
   const selectedPatient = store.patients.find((patient) => patient.id === patientId);
   const patientAssessment = store.assessments.find((assessment) => assessment.patientId === patientId);
   const patientAnamnesis = store.anamnesis.find((item) => item.patientId === patientId);
@@ -2322,17 +2350,16 @@ export function MealPlansWorkspace() {
     ...defaultMealTimes,
     ...(currentPlan?.mealTimes ?? {}),
   }));
-  const [structuredItems, setStructuredItems] = useState<StructuredPlanItem[]>(currentPlan?.structuredItems ?? defaultStructuredItems);
+  const [structuredItems, setStructuredItems] = useState<StructuredPlanItem[]>(currentPlan?.structuredItems ?? []);
+  const [planSubstitutions, setPlanSubstitutions] = useState<StructuredPlanSubstitution[]>(currentPlan?.substitutions ?? []);
+  const [savedEditorSignature, setSavedEditorSignature] = useState(() => JSON.stringify({
+    meals: currentPlan?.meals ?? {},
+    mealTimes: currentPlan?.mealTimes ?? defaultMealTimes,
+    structuredItems: currentPlan?.structuredItems ?? [],
+    substitutions: currentPlan?.substitutions ?? [],
+  }));
   const grams = Math.max(1, Number(referenceGrams) || 100);
   const referenceFood = prescriptionFoods.find((food) => food.id === referenceFoodId) ?? fallbackFood;
-  const structuredFood = prescriptionFoods.find((food) => food.id === structuredFoodId) ?? fallbackFood;
-  const referenceMacros = {
-    kcal: scaledNutrient(referenceFood.kcal, grams),
-    carbs: scaledNutrient(referenceFood.carbs, grams),
-    protein: scaledNutrient(referenceFood.protein, grams),
-    fat: scaledNutrient(referenceFood.fat, grams),
-    fiber: scaledNutrient(referenceFood.fiber, grams),
-  };
   const substitutionSuggestions = suggestBrazilianSubstitutions(
     referenceFood,
     grams,
@@ -2348,15 +2375,56 @@ export function MealPlansWorkspace() {
     return { meal, time: mealTimes[meal] ?? "", notes: meals[meal] ?? "", items, kcal };
   });
   const productQuickSearches = ["banana", "maca", "aveia", "mingau", "iogurte", "ovo", "arroz", "feijao"];
+  const productCategories = useMemo(
+    () => ["Todas", ...Array.from(new Set(prescriptionFoods.map((food) => food.category))).sort((a, b) => a.localeCompare(b))],
+    [prescriptionFoods],
+  );
   const filteredProducts = useMemo(() => {
     const needle = normalizeQuery(productQuery);
     return prescriptionFoods
       .filter((food) => {
+        const matchesCategory = productCategory === "Todas" || food.category === productCategory;
+        if (!matchesCategory) return false;
         if (!needle) return productQuickSearches.some((term) => normalizeQuery(food.name).includes(term));
-        return normalizeQuery(`${food.name} ${food.category} ${food.source}`).includes(needle);
+        return normalizeQuery(`${food.name} ${food.category}`).includes(needle);
       })
-      .slice(0, 12);
-  }, [prescriptionFoods, productQuery]);
+      .sort((left, right) => {
+        const leftName = normalizeQuery(left.name);
+        const rightName = normalizeQuery(right.name);
+        const leftStarts = needle && leftName.startsWith(needle) ? 0 : 1;
+        const rightStarts = needle && rightName.startsWith(needle) ? 0 : 1;
+        return leftStarts - rightStarts || left.name.localeCompare(right.name);
+      })
+      .slice(0, 18);
+  }, [prescriptionFoods, productCategory, productQuery]);
+
+  const editorSignature = useMemo(() => JSON.stringify({
+    meals,
+    mealTimes,
+    structuredItems,
+    substitutions: planSubstitutions,
+  }), [mealTimes, meals, planSubstitutions, structuredItems]);
+  const planDirty = editorSignature !== savedEditorSignature;
+
+  activePatientId.current = patientId;
+  mealPlansSnapshot.current = store.mealPlans;
+
+  const hydrateMealPlanEditor = useCallback((nextPatientId: string, plan?: MealPlan) => {
+    const base = Object.fromEntries(requiredMeals.map((meal) => [meal, ""]));
+    setMeals({ ...base, ...(plan?.meals ?? {}) });
+    setMealTimes({ ...defaultMealTimes, ...(plan?.mealTimes ?? {}) });
+    setStructuredItems(plan?.structuredItems ?? []);
+    setPlanSubstitutions(plan?.substitutions ?? []);
+    setEditorPatientId(nextPatientId);
+    setSavedEditorSignature(JSON.stringify({
+      meals: { ...base, ...(plan?.meals ?? {}) },
+      mealTimes: { ...defaultMealTimes, ...(plan?.mealTimes ?? {}) },
+      structuredItems: plan?.structuredItems ?? [],
+      substitutions: plan?.substitutions ?? [],
+    }));
+    setPersistenceStatus("idle");
+    setPersistenceMessage(plan ? "Plano carregado. Edite e clique em Salvar plano alimentar para gravar alteracoes." : "Monte o plano e clique em Salvar plano alimentar.");
+  }, []);
 
   useEffect(() => {
     if (store.patients.length > 0 && !store.patients.some((patient) => patient.id === patientId)) {
@@ -2365,13 +2433,9 @@ export function MealPlansWorkspace() {
   }, [patientId, store.patients]);
 
   useEffect(() => {
-    const plan = store.mealPlans.find((item) => item.patientId === patientId);
-    const base = Object.fromEntries(requiredMeals.map((meal) => [meal, ""]));
-    setMeals({ ...base, ...(plan?.meals ?? {}) });
-    setMealTimes({ ...defaultMealTimes, ...(plan?.mealTimes ?? {}) });
-    setStructuredItems(plan?.structuredItems ?? defaultStructuredItems);
-    setEditorPatientId(patientId);
-  }, [defaultStructuredItems, patientId, store.mealPlans]);
+    const plan = mealPlansSnapshot.current.find((item) => item.patientId === patientId);
+    hydrateMealPlanEditor(patientId, plan);
+  }, [hydrateMealPlanEditor, patientId]);
 
   useEffect(() => {
     async function loadBackendPlans() {
@@ -2388,6 +2452,9 @@ export function MealPlansWorkspace() {
             ...current,
             mealPlans: [plan, ...current.mealPlans.filter((item) => item.patientId !== patientId)],
           }));
+          if (activePatientId.current === patientId) {
+            hydrateMealPlanEditor(patientId, plan);
+          }
         }
       } catch {
         setPersistenceMessage("Cardapio local exibido. Nao foi possivel carregar cardapio salvo no backend.");
@@ -2397,56 +2464,51 @@ export function MealPlansWorkspace() {
     }
 
     void loadBackendPlans();
-  }, [patientId, setStore]);
+  }, [hydrateMealPlanEditor, patientId, setStore]);
 
-  useEffect(() => {
+  async function saveMealPlan() {
     if (!patientId || editorPatientId !== patientId || backendSyncReadyPatientId !== patientId) return;
-    const version = autosaveVersion.current + 1;
-    autosaveVersion.current = version;
     const localPlan: MealPlan = {
       backendId: currentPlan?.backendId,
       patientId,
       meals,
       mealTimes,
       structuredItems,
+      substitutions: planSubstitutions,
     };
-    setStore((current) => ({
-      ...current,
-      mealPlans: [
-        localPlan,
-        ...current.mealPlans.filter((plan) => plan.patientId !== patientId),
-      ],
-    }));
 
-    const hasPlanContent = structuredItems.length > 0 || requiredMeals.some((meal) => meals[meal]?.trim());
-    if (!currentPlan?.backendId && !hasPlanContent) {
-      setPersistenceStatus("idle");
-      setPersistenceMessage("Inclua um alimento ou uma orientacao para iniciar o salvamento automatico.");
-      return undefined;
+    const hasPlanContent = structuredItems.length > 0 || planSubstitutions.length > 0 || requiredMeals.some((meal) => meals[meal]?.trim());
+    if (!hasPlanContent) {
+      setPersistenceStatus("error");
+      setPersistenceMessage("Inclua ao menos um alimento ou uma orientacao antes de salvar o plano.");
+      return;
     }
 
     const backendPatientId = Number(patientId);
     if (!Number.isInteger(backendPatientId)) {
+      setStore((current) => ({
+        ...current,
+        mealPlans: [localPlan, ...current.mealPlans.filter((plan) => plan.patientId !== patientId)],
+      }));
       setPersistenceStatus("local");
-      setPersistenceMessage("Alteracoes salvas automaticamente na ficha local do paciente.");
-      return undefined;
+      setPersistenceMessage("Plano salvo na ficha local. Cadastre o paciente na API para disponibilizar o download pelo banco de dados.");
+      setSavedEditorSignature(editorSignature);
+      return;
     }
 
-    setPersistenceStatus("saving");
-    setPersistenceMessage("Salvando automaticamente...");
-    const timer = window.setTimeout(async () => {
-      const payload = {
-        title: `Plano alimentar - ${selectedPatient?.name ?? "Paciente"}`,
-        target_kcal: energyTarget?.target_kcal,
-        target_protein_g: macroTargets?.protein_g,
-        target_carbs_g: macroTargets?.carbs_g,
-        target_fat_g: macroTargets?.fat_g,
-        notes: "Plano criado pelo workspace SmartDiet Beta.",
-        meals: requiredMeals.map((meal) => ({
-          meal_type: meal,
-          time: mealTimes[meal] || null,
-          notes: meals[meal] || null,
-          items: structuredItems
+    const payload = {
+      title: `Plano alimentar - ${selectedPatient?.name ?? "Paciente"}`,
+      target_kcal: energyTarget?.target_kcal,
+      target_protein_g: macroTargets?.protein_g,
+      target_carbs_g: macroTargets?.carbs_g,
+      target_fat_g: macroTargets?.fat_g,
+      notes: "Plano criado pelo workspace SmartDiet Beta.",
+      meals: requiredMeals.map((meal) => ({
+        meal_type: meal,
+        time: mealTimes[meal] || null,
+        notes: meals[meal] || null,
+        items: [
+          ...structuredItems
             .filter((item) => item.meal === meal)
             .map((item) => {
               const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId) ?? fallbackFood;
@@ -2457,46 +2519,47 @@ export function MealPlansWorkspace() {
                 notes: food.name,
               };
             }),
-        })),
-      };
-      try {
-        const saved = currentPlan?.backendId
-          ? requireApiData(await apiPut<BackendMealPlan>(`/patients/${backendPatientId}/meal-plans/${currentPlan.backendId}`, payload))
-          : requireApiData(await apiPost<BackendMealPlan>(`/patients/${backendPatientId}/meal-plans`, payload));
-        if (autosaveVersion.current !== version) return;
-        setStore((current) => ({
-          ...current,
-          mealPlans: [
-            { ...localPlan, backendId: String(saved.id) },
-            ...current.mealPlans.filter((plan) => plan.patientId !== patientId),
-          ],
-        }));
-        setPersistenceStatus("saved");
-        setPersistenceMessage("Plano salvo automaticamente e disponivel na ficha e nos relatorios.");
-      } catch {
-        if (autosaveVersion.current !== version) return;
-        setPersistenceStatus("error");
-        setPersistenceMessage("Salvo na ficha local; a sincronizacao com o backend sera tentada na proxima alteracao.");
-      }
-    }, 800);
+          ...planSubstitutions
+            .filter((item) => item.meal === meal)
+            .map((item) => {
+              const reference = prescriptionFoods.find((candidate) => candidate.id === item.referenceFoodId) ?? fallbackFood;
+              const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId) ?? fallbackFood;
+              return {
+                quantity: item.grams,
+                unit: "g",
+                grams: item.grams,
+                notes: `Substituicao para ${reference.name}: ${food.name}`,
+              };
+            }),
+        ],
+      })),
+    };
 
-    return () => window.clearTimeout(timer);
-  }, [
-    backendSyncReadyPatientId,
-    currentPlan?.backendId,
-    editorPatientId,
-    energyTarget?.target_kcal,
-    macroTargets?.carbs_g,
-    macroTargets?.fat_g,
-    macroTargets?.protein_g,
-    mealTimes,
-    meals,
-    patientId,
-    prescriptionFoods,
-    selectedPatient?.name,
-    setStore,
-    structuredItems,
-  ]);
+    setPersistenceStatus("saving");
+    setPersistenceMessage("Gravando plano no banco de dados...");
+    try {
+      const saved = currentPlan?.backendId
+        ? requireApiData(await apiPut<BackendMealPlan>(`/patients/${backendPatientId}/meal-plans/${currentPlan.backendId}`, payload))
+        : requireApiData(await apiPost<BackendMealPlan>(`/patients/${backendPatientId}/meal-plans`, payload));
+      setStore((current) => ({
+        ...current,
+        mealPlans: [
+          { ...localPlan, backendId: String(saved.id) },
+          ...current.mealPlans.filter((plan) => plan.patientId !== patientId),
+        ],
+      }));
+      setSavedEditorSignature(editorSignature);
+      setPersistenceStatus("saved");
+      setPersistenceMessage("Plano salvo no banco e disponivel no Resumo alimentar para visualizacao e download.");
+    } catch {
+      setStore((current) => ({
+        ...current,
+        mealPlans: [localPlan, ...current.mealPlans.filter((plan) => plan.patientId !== patientId)],
+      }));
+      setPersistenceStatus("error");
+      setPersistenceMessage("O plano foi mantido localmente, mas nao chegou ao banco. Tente salvar novamente antes de gerar o relatorio.");
+    }
+  }
 
   function findFoodIdForTemplate(searchTerms: string[]) {
     const normalizedTerms = searchTerms.map(normalizeQuery);
@@ -2522,22 +2585,27 @@ export function MealPlansWorkspace() {
     setMeals({ ...meals, ...mealPlanTemplates[templateName] });
     setMealTimes({ ...mealTimes, ...(mealPlanTemplateTimes[templateName] ?? {}) });
     setStructuredItems(templateStructuredItems(templateName));
+    setPlanSubstitutions([]);
     setMealAnalysis(null);
     setClinicalAlerts(null);
     setAnalysisStatus("idle");
-    setPersistenceMessage("Modelo aplicado com horarios e itens estruturados para calculo de kcal.");
+    setPersistenceStatus("idle");
+    setPersistenceMessage("Modelo aplicado. Revise os alimentos e clique em Salvar plano alimentar.");
   }
 
   function addSubstitutionToMeal(food: TacoFood) {
-    const line = `Substituicao: ${formatNutrient(grams, " g")} de ${referenceFood.name} -> ${formatNutrient(grams, " g")} de ${food.name} (${formatNutrient(scaledNutrient(food.kcal, grams), " kcal")}, ${formatNutrient(scaledNutrient(food.carbs, grams), " g C")}).`;
-    setMeals((current) => ({
+    setPlanSubstitutions((current) => [
       ...current,
-      [selectedSubMeal]: `${current[selectedSubMeal] ? `${current[selectedSubMeal]}\n` : ""}${line}`,
-    }));
-  }
-
-  function addStructuredItem() {
-    addProductToMeal(structuredFood);
+      {
+        id: createId("plan-substitution"),
+        meal: selectedSubMeal,
+        referenceFoodId: referenceFood.id,
+        foodId: food.id,
+        grams: String(grams),
+      },
+    ]);
+    setPersistenceStatus("idle");
+    setPersistenceMessage("Substituicao adicionada. Salve o plano para envia-la ao banco e ao resumo alimentar.");
   }
 
   function addProductToMeal(food: TacoFood) {
@@ -2546,11 +2614,19 @@ export function MealPlansWorkspace() {
       ...current,
       { id: createId("plan-item"), meal: structuredMeal, foodId: food.id, grams },
     ]);
-    setStructuredFoodId(food.id);
+    setReferenceFoodId(food.id);
+    setReferenceGrams(grams);
+    setSelectedSubMeal(structuredMeal);
+    setPersistenceStatus("idle");
+    setPersistenceMessage("Alimento inserido. Clique em Salvar plano alimentar quando concluir.");
   }
 
   function removeStructuredItem(id: string) {
     setStructuredItems((current) => current.filter((item) => item.id !== id));
+  }
+
+  function removePlanSubstitution(id: string) {
+    setPlanSubstitutions((current) => current.filter((item) => item.id !== id));
   }
 
   function inferConditions() {
@@ -2565,7 +2641,7 @@ export function MealPlansWorkspace() {
     ].filter(Boolean);
   }
 
-  async function analyzeStructuredPlan() {
+  async function analyzeStructuredPlan(version: number) {
     const weight = Number(patientAssessment?.weight || 70);
     const height = Number(patientAssessment?.height || 165);
     const objective = goalToObjective(selectedPatient?.goal ?? selectedTemplate);
@@ -2613,18 +2689,22 @@ export function MealPlansWorkspace() {
         }),
       );
 
+      if (analysisVersion.current !== version) return;
       setEnergyTarget(energy);
       setMacroTargets(macros);
       setMealAnalysis(analysis);
       setClinicalAlerts(alerts);
       setAnalysisStatus("ready");
     } catch {
+      if (analysisVersion.current !== version) return;
       setAnalysisStatus("error");
       setAnalysisMessage(`Nao foi possivel consultar o backend nutricional. Confira se NEXT_PUBLIC_API_BASE_URL aponta para ${API_BASE_URL.includes("/api/v1") ? API_BASE_URL : `${API_BASE_URL}/api/v1`}.`);
     }
   }
 
   useEffect(() => {
+    const version = analysisVersion.current + 1;
+    analysisVersion.current = version;
     if (!patientId || editorPatientId !== patientId || structuredItems.length === 0) {
       setMealAnalysis(null);
       setClinicalAlerts(null);
@@ -2632,14 +2712,14 @@ export function MealPlansWorkspace() {
       return;
     }
     const timer = window.setTimeout(() => {
-      void analyzeStructuredPlan();
+      void analyzeStructuredPlan(version);
     }, 700);
     return () => window.clearTimeout(timer);
   }, [editorPatientId, patientId, selectedTemplate, structuredItems]);
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Salad} title="Cardapio do paciente" subtitle="Refeicoes, horarios e alimentos salvos automaticamente na ficha individual do paciente." />
+      <PageHeader icon={Salad} title="Plano alimentar" subtitle="Monte as refeicoes com alimentos da TBCA e salve o plano no banco para utiliza-lo no Resumo alimentar." />
       <SmartCard className="p-5">
         <div className="mb-4 grid gap-4 xl:grid-cols-[360px_1fr]">
           <PatientSelect patients={store.patients} value={patientId} onChange={setPatientId} />
@@ -2688,9 +2768,9 @@ export function MealPlansWorkspace() {
           <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
             <div>
               <p className="text-[13px] font-semibold text-graphite">Registro de cardapio do paciente</p>
-              <p className="mt-1 text-[12px] leading-5 text-graphite/65">Resumo das refeicoes cadastradas e sincronizadas automaticamente com a ficha e os relatorios.</p>
+              <p className="mt-1 text-[12px] leading-5 text-graphite/65">Resumo das refeicoes atualmente carregadas no editor. Alteracoes so chegam ao banco depois de salvar.</p>
             </div>
-            <NutritionBadge label="Base" value="Brasileira" />
+            <NutritionBadge label="Base exclusiva" value="TBCA" />
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {mealRecords.map((record) => (
@@ -2715,14 +2795,14 @@ export function MealPlansWorkspace() {
         <div className="mb-5 rounded-smart border border-line bg-background p-4">
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
             <div>
-              <p className="text-[13px] font-semibold text-graphite">Produtos para inserir na dieta</p>
+              <p className="text-[13px] font-semibold text-graphite">Buscar alimento na TBCA</p>
               <p className="mt-1 text-[12px] leading-5 text-graphite/65">
-                Escolha alimentos unitarios da base brasileira, defina refeicao e quantidade, e insira direto no cardapio.
+                Digite o nome comum, filtre o grupo se necessario e insira o alimento diretamente na refeicao.
               </p>
             </div>
             <Apple className="h-5 w-5 shrink-0 text-forest" aria-hidden="true" />
           </div>
-          <div className="mt-4 grid gap-3 lg:grid-cols-[160px_120px_1fr]">
+          <div className="mt-4 grid gap-3 lg:grid-cols-[160px_120px_1fr_220px]">
             <label className={labelClass}>
               Refeicao
               <select className={inputClass} value={structuredMeal} onChange={(event) => setStructuredMeal(event.target.value)}>
@@ -2739,10 +2819,16 @@ export function MealPlansWorkspace() {
               Buscar produto
               <input
                 className={inputClass}
-                placeholder="Ex.: banana, maca, aveia, mingau..."
+                placeholder="Ex.: arroz, banana, aveia..."
                 value={productQuery}
                 onChange={(event) => setProductQuery(event.target.value)}
               />
+            </label>
+            <label className={labelClass}>
+              Grupo alimentar
+              <select className={inputClass} value={productCategory} onChange={(event) => setProductCategory(event.target.value)}>
+                {productCategories.map((category) => <option key={category}>{category}</option>)}
+              </select>
             </label>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -2764,6 +2850,7 @@ export function MealPlansWorkspace() {
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-graphite">{food.name}</p>
                     <p className="mt-1 text-[12px] text-graphite/65">{food.category}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-forest">TBCA</p>
                   </div>
                   <NutritionBadge label="kcal" value={formatNutrient(scaledNutrient(food.kcal, Number(structuredGrams) || 100))} />
                 </div>
@@ -2807,107 +2894,12 @@ export function MealPlansWorkspace() {
           ))}
         </div>
         <div className="mt-5 rounded-smart border border-line bg-background p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[13px] font-semibold text-graphite">Substituicoes vinculadas a prescricao</p>
-              <p className="mt-1 text-[12px] text-graphite/65">Escolha o alimento base brasileira e revise alternativas com energia e macros antes de inserir no plano.</p>
-            </div>
-            <Repeat2 className="h-5 w-5 text-forest" aria-hidden="true" />
-          </div>
-          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_140px_180px]">
-            <label className={labelClass}>
-              Alimento base da prescricao
-              <select className={inputClass} value={referenceFoodId} onChange={(event) => setReferenceFoodId(event.target.value)}>
-                {prescriptionFoods.map((food) => (
-                  <option key={food.id} value={food.id}>
-                    {food.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Quantidade g
-              <input className={inputClass} inputMode="decimal" value={referenceGrams} onChange={(event) => setReferenceGrams(event.target.value)} />
-            </label>
-            <label className={labelClass}>
-              Inserir em
-              <select className={inputClass} value={selectedSubMeal} onChange={(event) => setSelectedSubMeal(event.target.value)}>
-                {requiredMeals.map((meal) => (
-                  <option key={meal} value={meal}>{meal}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="mt-3 rounded-smart border border-sage/70 bg-mist p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13px] font-semibold text-forest">{referenceFood.name}</span>
-              <NutritionBadge label="kcal" value={formatNutrient(referenceMacros.kcal)} />
-              <NutritionBadge label="C" value={formatNutrient(referenceMacros.carbs, " g")} />
-              <NutritionBadge label="P" value={formatNutrient(referenceMacros.protein, " g")} />
-              <NutritionBadge label="G" value={formatNutrient(referenceMacros.fat, " g")} />
-              <NutritionBadge label="Fibra" value={formatNutrient(referenceMacros.fiber, " g")} />
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {substitutionSuggestions.map((suggestion) => (
-              <article className="rounded-smart border border-line bg-surface p-4" key={suggestion.food.id}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-[14px] font-semibold text-graphite">{suggestion.food.name}</h3>
-                    <p className="mt-1 text-[12px] text-graphite/65">{suggestion.food.category}</p>
-                  </div>
-                  <button
-                    className="h-9 shrink-0 rounded-smart border border-line bg-background px-3 text-[12px] font-semibold text-forest transition duration-200 hover:border-sage hover:bg-mist"
-                    type="button"
-                    onClick={() => addSubstitutionToMeal(suggestion.food)}
-                  >
-                    Inserir
-                  </button>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <NutritionBadge label="kcal" value={formatNutrient(suggestion.kcal)} />
-                  <NutritionBadge label="C" value={formatNutrient(suggestion.carbs, " g")} />
-                  <NutritionBadge label="P" value={formatNutrient(suggestion.protein, " g")} />
-                  <NutritionBadge label="G" value={formatNutrient(suggestion.fat, " g")} />
-                  <NutritionBadge label="Δ kcal" value={formatNutrient(suggestion.kcalDelta)} />
-                  <NutritionBadge label="Δ C" value={formatNutrient(suggestion.carbsDelta, " g")} />
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-        <div className="mt-5 rounded-smart border border-line bg-background p-4">
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
             <div>
-              <p className="text-[13px] font-semibold text-graphite">Alimentos e resumo nutricional automatico</p>
-              <p className="mt-1 text-[12px] text-graphite/65">Inclua os alimentos em cada refeicao. Energia, macros e alertas sao recalculados sem uma etapa manual.</p>
+              <p className="text-[13px] font-semibold text-graphite">Alimentos escolhidos e resumo nutricional</p>
+              <p className="mt-1 text-[12px] text-graphite/65">Revise os alimentos inseridos. O calculo e atualizado automaticamente, mas o plano so e gravado ao clicar em salvar.</p>
             </div>
             <NutritionBadge label="Calculo" value={analysisStatus === "loading" ? "Atualizando" : analysisStatus === "ready" ? "Atualizado" : "Automatico"} />
-          </div>
-          <div className="mt-4 grid gap-3 lg:grid-cols-[160px_1fr_120px_120px]">
-            <label className={labelClass}>
-              Refeicao
-              <select className={inputClass} value={structuredMeal} onChange={(event) => setStructuredMeal(event.target.value)}>
-                {requiredMeals.map((meal) => (
-                  <option key={meal} value={meal}>{meal}</option>
-                ))}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Alimento
-              <select className={inputClass} value={structuredFoodId} onChange={(event) => setStructuredFoodId(event.target.value)}>
-                {prescriptionFoods.map((food) => (
-                  <option key={food.id} value={food.id}>{food.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Gramas
-              <input className={inputClass} inputMode="decimal" value={structuredGrams} onChange={(event) => setStructuredGrams(event.target.value)} />
-            </label>
-            <button className="mt-5 h-10 rounded-smart border border-line bg-surface px-3 text-[13px] font-semibold text-forest transition duration-200 hover:border-sage hover:bg-mist" type="button" onClick={addStructuredItem}>
-              Inserir item
-            </button>
           </div>
           <div className="mt-4 grid gap-2">
             {structuredItems.map((item) => {
@@ -2924,7 +2916,62 @@ export function MealPlansWorkspace() {
                 </div>
               );
             })}
+            {structuredItems.length === 0 ? <p className="text-[13px] text-graphite/65">Nenhum alimento escolhido. Use a busca TBCA acima para montar as refeicoes.</p> : null}
           </div>
+          <details className="mt-4 rounded-smart border border-line bg-surface p-4">
+            <summary className="cursor-pointer text-[14px] font-semibold text-forest">Substituicoes</summary>
+            <p className="mt-2 text-[12px] leading-5 text-graphite/65">
+              Opcional: escolha um alimento ja usado, a refeicao e uma alternativa equivalente da TBCA.
+            </p>
+            <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_150px_130px]">
+              <label className={labelClass}>
+                Alimento de referencia
+                <select className={inputClass} value={referenceFoodId} onChange={(event) => setReferenceFoodId(event.target.value)}>
+                  {Array.from(new Set(structuredItems.map((item) => item.foodId))).map((foodId) => {
+                    const food = prescriptionFoods.find((candidate) => candidate.id === foodId) ?? fallbackFood;
+                    return <option key={food.id} value={food.id}>{food.name}</option>;
+                  })}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Refeicao
+                <select className={inputClass} value={selectedSubMeal} onChange={(event) => setSelectedSubMeal(event.target.value)}>
+                  {requiredMeals.map((meal) => <option key={meal}>{meal}</option>)}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Quantidade g
+                <input className={inputClass} inputMode="decimal" value={referenceGrams} onChange={(event) => setReferenceGrams(event.target.value)} />
+              </label>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {substitutionSuggestions.slice(0, 6).map((suggestion) => (
+                <button
+                  className="rounded-smart border border-line bg-background p-3 text-left transition duration-200 hover:border-sage hover:bg-mist"
+                  key={suggestion.food.id}
+                  type="button"
+                  onClick={() => addSubstitutionToMeal(suggestion.food)}
+                >
+                  <span className="block text-[13px] font-semibold text-graphite">{suggestion.food.name}</span>
+                  <span className="mt-1 block text-[11px] text-graphite/65">{formatNutrient(suggestion.kcal, " kcal")} · TBCA</span>
+                </button>
+              ))}
+            </div>
+            {planSubstitutions.length > 0 ? (
+              <div className="mt-4 grid gap-2">
+                {planSubstitutions.map((item) => {
+                  const reference = prescriptionFoods.find((food) => food.id === item.referenceFoodId) ?? fallbackFood;
+                  const alternative = prescriptionFoods.find((food) => food.id === item.foodId) ?? fallbackFood;
+                  return (
+                    <div className="flex flex-col gap-2 rounded-smart border border-sage/70 bg-mist p-3 sm:flex-row sm:items-center sm:justify-between" key={item.id}>
+                      <p className="text-[12px] text-graphite"><strong>{item.meal}:</strong> {reference.name} → {alternative.name} ({item.grams} g)</p>
+                      <button className="text-[12px] font-semibold text-terracotta" type="button" onClick={() => removePlanSubstitution(item.id)}>Remover</button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </details>
           {analysisStatus === "error" ? <p className="mt-3 text-[13px] font-medium text-terracotta">{analysisMessage}</p> : null}
           {mealAnalysis ? (
             <div className="mt-4 grid gap-3 xl:grid-cols-3">
@@ -2962,10 +3009,22 @@ export function MealPlansWorkspace() {
         <div className="mt-4 rounded-smart border border-sage/70 bg-mist p-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-[13px] font-semibold text-forest">Salvamento automatico por paciente</p>
-              <p className="mt-1 text-[12px] leading-5 text-graphite/70">Nao e necessario salvar nem gerar PDF nesta pagina. Confira e exporte os resumos na aba Relatorios.</p>
+              <p className="text-[13px] font-semibold text-forest">Salvar plano alimentar</p>
+              <p className="mt-1 text-[12px] leading-5 text-graphite/70">O botao grava refeicoes, horarios, alimentos e substituicoes no banco do paciente para uso no Resumo alimentar.</p>
             </div>
-            <NutritionBadge label="Status" value={persistenceStatus === "saving" ? "Salvando" : persistenceStatus === "error" ? "Local" : "Salvo"} />
+            <button
+              className={primaryButtonClass}
+              disabled={!patientId || backendSyncReadyPatientId !== patientId || persistenceStatus === "saving" || (!planDirty && persistenceStatus === "saved")}
+              type="button"
+              onClick={() => void saveMealPlan()}
+            >
+              {persistenceStatus === "saving" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <FileText className="mr-2 h-4 w-4" aria-hidden="true" />}
+              {persistenceStatus === "saving" ? "Salvando..." : "Salvar plano alimentar"}
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <NutritionBadge label="Status" value={persistenceStatus === "saving" ? "Salvando" : persistenceStatus === "error" ? "Nao sincronizado" : planDirty ? "Alteracoes pendentes" : persistenceStatus === "saved" ? "Salvo no banco" : "Pronto para editar"} />
+            <NutritionBadge label="Destino" value="Resumo alimentar" />
           </div>
           {persistenceMessage ? (
             <p className={`mt-2 text-[13px] font-medium ${persistenceStatus === "error" ? "text-terracotta" : "text-graphite/70"}`}>
@@ -3218,7 +3277,7 @@ export function FoodsWorkspace() {
     showFoodSodium: true,
   });
   const normalizedQuery = normalizeQuery(query);
-  const brazilianFoodTables = useMemo(() => [...tbcaFoods, ...tacoFoods], []);
+  const brazilianFoodTables = useMemo(() => tbcaFoods, []);
   const categories = useMemo(
     () => ["Todas", ...Array.from(new Set(brazilianFoodTables.map((food) => food.category))).sort((a, b) => a.localeCompare(b))],
     [brazilianFoodTables],
@@ -3396,9 +3455,9 @@ export function FoodsWorkspace() {
               <p className="mt-1 text-[12px] text-graphite/60">Itens brasileiros principais</p>
             </div>
             <div className="rounded-smart border border-line bg-background p-3">
-              <p className="text-[12px] text-graphite/65">Complementares</p>
-              <p className="mt-1 text-[22px] font-semibold text-graphite">{tacoFoods.length}</p>
-              <p className="mt-1 text-[12px] text-graphite/60">Usados automaticamente quando necessario</p>
+              <p className="text-[12px] text-graphite/65">Outras bases</p>
+              <p className="mt-1 text-[22px] font-semibold text-graphite">0</p>
+              <p className="mt-1 text-[12px] text-graphite/60">Nenhuma base complementar ativa</p>
             </div>
             <div className="rounded-smart border border-line bg-background p-3">
               <p className="text-[12px] text-graphite/65">Consulta</p>
@@ -3407,7 +3466,7 @@ export function FoodsWorkspace() {
             </div>
           </div>
           <div className="mt-3 rounded-smart border border-sage/70 bg-mist p-3 text-[13px] leading-5 text-graphite">
-            A base alimentar brasileira ja esta priorizada. O sistema usa dados complementares automaticamente quando necessario.
+            A TBCA e a unica base utilizada para busca, composicao nutricional e montagem dos planos alimentares.
           </div>
 
           <div className="mt-4 grid gap-3">
@@ -4514,30 +4573,6 @@ export function DiaryWorkspace() {
   );
 }
 
-export function SubstitutionsWorkspace() {
-  return (
-    <div className="space-y-6">
-      <PageHeader icon={Repeat2} title="Substituicoes" subtitle="Gerador profissional de alternativas equivalentes para revisao humana." />
-      <SmartCard className="p-5">
-        <div className="grid gap-4 lg:grid-cols-3">
-          {[
-            ["Arroz branco cozido", "Batata inglesa cozida", "Mandioca cozida"],
-            ["Peito de frango", "Ovos", "Tilapia grelhada"],
-            ["Iogurte natural", "Kefir", "Bebida vegetal fortificada"],
-          ].map((group, index) => (
-            <article className="rounded-smart border border-line bg-background p-4" key={group[0]}>
-              <h3 className="text-[15px] font-semibold text-graphite">Grupo {index + 1}</h3>
-              <div className="mt-3 space-y-2">
-                {group.map((item) => <p className="rounded-smart bg-surface px-3 py-2 text-[13px] text-graphite" key={item}>{item}</p>)}
-              </div>
-            </article>
-          ))}
-        </div>
-      </SmartCard>
-    </div>
-  );
-}
-
 export function ReportsWorkspace() {
   const { ready, store, setStore } = useSmartDietStore();
   const [patientId, setPatientId] = useState(store.patients[0]?.id ?? "");
@@ -4570,8 +4605,9 @@ export function ReportsWorkspace() {
     const text = normalizeQuery(`${goal.focus} ${goal.metric}`);
     return text.includes("aderencia");
   });
-  const prescriptionFoods = useMemo(() => [...tbcaFoods, ...tacoFoods].filter(hasNutrientData), []);
+  const prescriptionFoods = useMemo(() => tbcaFoods.filter(hasNutrientData), []);
   const mealPlanItems = selectedPlan?.structuredItems ?? [];
+  const mealPlanSubstitutions = selectedPlan?.substitutions ?? [];
   const mealPlanTotalKcal = mealPlanItems.reduce((total, item) => {
     const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId);
     return total + (scaledNutrient(food?.kcal, Number(item.grams)) ?? 0);
@@ -4587,7 +4623,7 @@ export function ReportsWorkspace() {
   ];
   const reportHasContent = reportTab === "clinical"
     ? Boolean(selectedPatient)
-    : Boolean(selectedPlan && (mealPlanItems.length > 0 || requiredMeals.some((meal) => selectedPlan.meals?.[meal]?.trim())));
+    : Boolean(selectedPlan && (mealPlanItems.length > 0 || mealPlanSubstitutions.length > 0 || requiredMeals.some((meal) => selectedPlan.meals?.[meal]?.trim())));
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -4854,6 +4890,7 @@ export function ReportsWorkspace() {
         <h2>Plano por refeicao</h2>
         ${requiredMeals.map((meal) => {
           const items = mealPlanItems.filter((item) => item.meal === meal);
+          const substitutions = mealPlanSubstitutions.filter((item) => item.meal === meal);
           const kcal = items.reduce((total, item) => {
             const food = prescriptionFoods.find((candidate) => candidate.id === item.foodId);
             return total + (scaledNutrient(food?.kcal, Number(item.grams)) ?? 0);
@@ -4874,6 +4911,15 @@ export function ReportsWorkspace() {
                       return `<li>${escapeHtml(item.grams)} g - ${escapeHtml(food?.name || "Alimento")} (${escapeHtml(formatNutrient(scaledNutrient(food?.kcal, Number(item.grams)), " kcal"))})</li>`;
                     }).join("")}</ul>`
                   : "<p>Nenhum item estruturado nesta refeicao.</p>"
+              }
+              ${
+                substitutions.length
+                  ? `<h4>Substituicoes</h4><ul>${substitutions.map((item) => {
+                      const reference = prescriptionFoods.find((food) => food.id === item.referenceFoodId);
+                      const alternative = prescriptionFoods.find((food) => food.id === item.foodId);
+                      return `<li>${escapeHtml(reference?.name || "Alimento")} por ${escapeHtml(alternative?.name || "Alternativa")} - ${escapeHtml(item.grams)} g</li>`;
+                    }).join("")}</ul>`
+                  : ""
               }
             </article>
           `;
@@ -5155,6 +5201,7 @@ export function ReportsWorkspace() {
                 <div className="mt-4 grid gap-2">
                   {requiredMeals.map((meal) => {
                     const items = mealPlanItems.filter((item) => item.meal === meal);
+                    const substitutions = mealPlanSubstitutions.filter((item) => item.meal === meal);
                     return (
                       <div className="rounded-smart border border-line bg-surface p-3" key={meal}>
                         <div className="flex items-start justify-between gap-3">
@@ -5165,6 +5212,7 @@ export function ReportsWorkspace() {
                           <NutritionBadge label="Itens" value={String(items.length)} />
                         </div>
                         <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-graphite/65">{selectedPlan?.meals?.[meal] || "Sem orientacao textual."}</p>
+                        {substitutions.length > 0 ? <p className="mt-2 text-[11px] font-semibold text-forest">{substitutions.length} substituicao(oes)</p> : null}
                       </div>
                     );
                   })}

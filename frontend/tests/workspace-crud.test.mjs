@@ -44,9 +44,11 @@ test("reports require preview before exporting complete patient data", () => {
   assert.match(workspaceSource, /Receitas vinculadas/);
   assert.match(workspaceSource, /document\.body\.appendChild\(link\)/);
   assert.match(workspaceSource, /Plano alimentar atual/);
-  assert.match(workspaceSource, /Salvamento automatico por paciente/);
+  assert.match(workspaceSource, /Salvar plano alimentar/);
+  assert.match(workspaceSource, /Gravando plano no banco de dados/);
+  assert.match(workspaceSource, /Destino.*Resumo alimentar/s);
+  assert.match(workspaceSource, /Base exclusiva.*TBCA/s);
   assert.doesNotMatch(workspaceSource, />Analisar plano</);
-  assert.doesNotMatch(workspaceSource, />Salvar plano alimentar</);
 });
 
 test("navigation removes unused AI and foods routes while patients expose goal charts", () => {
@@ -55,6 +57,9 @@ test("navigation removes unused AI and foods routes while patients expose goal c
   assert.doesNotMatch(sidebarSource, /\/foods|Alimentos/);
   assert.doesNotMatch(headerSource, /\/foods|Alimentos/);
   assert.doesNotMatch(smartSearchSource, /href:\s*["']\/foods["']/);
+  assert.doesNotMatch(sidebarSource, /\/substitutions|Substituicoes/);
+  assert.doesNotMatch(headerSource, /\/substitutions|Substituicoes/);
+  assert.doesNotMatch(workspaceSource, /\.\.\.tbcaFoods, \.\.\.tacoFoods/);
   assert.match(workspaceSource, /function PatientGoalCharts/);
   assert.match(workspaceSource, /Progresso medio/);
   assert.match(workspaceSource, /Metas por prioridade/);
@@ -77,6 +82,15 @@ test("meal plans include an evidence-informed Mediterranean template", () => {
   assert.match(workspaceSource, /azeite extravirgem/);
   assert.match(workspaceSource, /grao-de-bico/);
   assert.match(workspaceSource, /Priorizar alimentos minimamente processados/);
+});
+
+test("meal plan uses explicit idempotent persistence instead of autosave", () => {
+  assert.match(workspaceSource, /mealPlansSnapshot\.current\.find/);
+  assert.match(workspaceSource, /async function saveMealPlan/);
+  assert.match(workspaceSource, /onClick=\{\(\) => void saveMealPlan\(\)\}/);
+  assert.match(workspaceSource, /Substituicao para/);
+  assert.match(workspaceSource, /analysisVersion\.current !== version/);
+  assert.doesNotMatch(workspaceSource, /lastBackendPayloadSignature|autosaveVersion/);
 });
 
 test("initial workspace ships only the requested real patient", () => {

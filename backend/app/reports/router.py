@@ -65,6 +65,7 @@ def _build_simple_pdf(lines: list[str]) -> bytes:
     page_object_numbers: list[int] = []
     for page_index, page_lines in enumerate(pages):
         content = bytearray()
+        content.extend(b"q 1 1 1 rg 0 0 595 842 re f Q\n")
         content.extend(b"q 0.184 0.435 0.310 rg 0 790 595 52 re f Q\n")
         content.extend(b"q 0.658 0.835 0.729 rg 0 786 595 4 re f Q\n")
         content.extend(b"BT /F2 16 Tf 46 812 Td (SmartDiet) Tj ET\n")

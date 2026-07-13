@@ -20,6 +20,7 @@ from app.plans.models import MealPlan, MealPlanItem, MealPlanMeal
 from app.plans.repository import MealPlanRepository
 from app.plans.schemas import MealPlanCreate, MealPlanItemCreate, MealPlanMealCreate, REQUIRED_MEALS
 from app.plans.service import MealPlanService
+from app.recipes.repository import RecipeRepository
 
 
 def main() -> None:
@@ -34,10 +35,11 @@ def main() -> None:
 
         patients = PatientRepository(db)
         plans = MealPlanRepository(db)
-        service = MealPlanService(plans, patients)
+        recipes = RecipeRepository(db)
+        service = MealPlanService(plans, patients, recipes)
         assessments = AssessmentService(AssessmentRepository(db), patients)
         anamnesis_service = AnamnesisService(AnamnesisRepository(db), patients)
-        diary_service = DiaryService(DiaryRepository(db), patients)
+        diary_service = DiaryService(DiaryRepository(db), patients, recipes)
 
         patient = patients.create(
             PatientCreate(

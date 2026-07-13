@@ -37,6 +37,7 @@
 
 html {
   min-width: 320px;
+  overflow-x: hidden;
 }
 
 body {
@@ -44,6 +45,13 @@ body {
   min-height: 100vh;
   background: rgb(var(--color-background));
   color: rgb(var(--color-graphite));
+  overflow-x: hidden;
+}
+
+img,
+svg,
+canvas {
+  max-width: 100%;
 }
 
 button,

@@ -12,6 +12,13 @@ def test_demo_patients_cover_three_distinct_clinical_profiles() -> None:
         "glycemic_control",
     }
     assert all(len(profile["bioimpedance"]) == 2 for profile in DEMO_PATIENTS)
+    assert {profile["patient"]["full_name"] for profile in DEMO_PATIENTS} == {
+        "Helena Costa QA",
+        "Lucas Ferreira QA",
+        "Renata Alves QA",
+    }
+    assert all(profile["recipes"] for profile in DEMO_PATIENTS)
+    assert all(profile["patient"]["phone"] and profile["patient"]["birth_date"] for profile in DEMO_PATIENTS)
 
 
 def test_every_demo_plan_has_required_meals_and_patient_specific_foods() -> None:

@@ -9,6 +9,7 @@ def test_meal_plan_pdf_builder_creates_valid_multipage_pdf() -> None:
     pdf = _build_simple_pdf(["SmartDiet - Cardapio", *[f"Linha {index}" for index in range(120)]])
 
     assert pdf.startswith(b"%PDF-1.4")
+    assert b"q 1 1 1 rg 0 0 595 842 re f Q" in pdf
     assert b"/Type /Page" in pdf
     assert b"/Count 4" in pdf
     assert b"/BaseFont /Helvetica-Bold" in pdf

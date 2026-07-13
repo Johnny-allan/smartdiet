@@ -33,16 +33,17 @@ from app.plans.repository import MealPlanRepository
 from app.plans.schemas import MealPlanCreate
 from app.plans.service import MealPlanService
 from app.recipes.repository import RecipeRepository
+from app.recipes.schemas import RecipeCreate, RecipeUpdate
 
 
 DEMO_PATIENTS: list[dict[str, Any]] = [
     {
         "patient": {
-            "full_name": "Ana Ribeiro Demo",
+            "full_name": "Helena Costa QA",
             "birth_date": "1967-03-14",
             "gender": "Feminino",
-            "email": "ana.ribeiro.demo@example.com",
-            "phone": "(11) 90000-0101",
+            "email": "helena.costa.qa@example.com",
+            "phone": "(11) 98881-0101",
             "status": "active",
             "notes": "Paciente sintetica. Perfil cardiovascular para validacao de relatorios.",
         },
@@ -79,9 +80,24 @@ DEMO_PATIENTS: list[dict[str, Any]] = [
             {"focus": "Circunferencia abdominal", "metric": "Cintura", "unit": "cm", "direction": "decrease", "baseline_value": "98", "current_value": "94", "target_value": "88", "status": "Em progresso", "notes": "Meta cardiovascular."},
             {"focus": "Aderencia mediterranea", "metric": "Aderencia", "unit": "%", "direction": "increase", "baseline_value": "55", "current_value": "72", "target_value": "85", "status": "Em progresso", "notes": "Acompanhar variedade vegetal semanal."},
         ],
+        "recipes": [
+            {
+                "title": "Bowl mediterraneo da Helena",
+                "description": "Arroz integral, feijao, sardinha, folhas, tomate e azeite extravirgem.",
+                "preparation_method": "Montar o bowl com os ingredientes cozidos, finalizar com folhas, tomate e azeite.",
+                "prep_time_minutes": 15,
+                "cook_time_minutes": 25,
+                "servings": 2,
+                "raw_weight_g": "650",
+                "cooked_weight_g": "720",
+                "yield_weight_g": "720",
+                "tags": ["mediterranea", "cardiovascular", "tbca"],
+                "professional_notes": "Receita sintetica para validacao integral da ficha e do relatorio.",
+            }
+        ],
         "diary": {"date": "2026-07-11", "meal_type": "Almoco", "quantity": "1", "grams": "420", "notes": "Arroz integral, feijao, sardinha, salada e azeite. Aderencia: 82%"},
         "plan": {
-            "title": "Dieta mediterranea - Ana Ribeiro Demo",
+            "title": "Dieta mediterranea - Helena Costa QA",
             "target_kcal": "1750",
             "target_protein_g": "95",
             "target_carbs_g": "205",
@@ -99,11 +115,11 @@ DEMO_PATIENTS: list[dict[str, Any]] = [
     },
     {
         "patient": {
-            "full_name": "Bruno Martins Demo",
+            "full_name": "Lucas Ferreira QA",
             "birth_date": "1996-11-02",
             "gender": "Masculino",
-            "email": "bruno.martins.demo@example.com",
-            "phone": "(21) 90000-0202",
+            "email": "lucas.ferreira.qa@example.com",
+            "phone": "(21) 98882-0202",
             "status": "active",
             "notes": "Paciente sintetico. Perfil esportivo para validacao de relatorios.",
         },
@@ -125,9 +141,24 @@ DEMO_PATIENTS: list[dict[str, Any]] = [
             {"date": "2026-07-09", "body_fat_percent": "13.8", "fat_mass_kg": "11.4", "lean_mass_kg": "71.2", "muscle_mass_kg": "38.4", "total_body_water_l": "51.7", "basal_metabolic_rate_kcal": "1865", "visceral_fat_level": "4", "metabolic_age": 24, "notes": "Evolucao positiva de massa magra."},
         ],
         "goals": [{"focus": "Massa muscular", "metric": "Massa muscular", "unit": "kg", "direction": "increase", "baseline_value": "36.9", "current_value": "38.4", "target_value": "40.0", "status": "Em progresso", "notes": "Evitar aumento excessivo de gordura."}],
+        "recipes": [
+            {
+                "title": "Marmita de frango do Lucas",
+                "description": "Arroz, feijao, peito de frango e legumes conforme porcoes do plano.",
+                "preparation_method": "Cozinhar os alimentos separadamente, porcionar e refrigerar em recipientes individuais.",
+                "prep_time_minutes": 20,
+                "cook_time_minutes": 40,
+                "servings": 5,
+                "raw_weight_g": "2200",
+                "cooked_weight_g": "2500",
+                "yield_weight_g": "2500",
+                "tags": ["esportivo", "marmita", "tbca"],
+                "professional_notes": "Distribuir as porcoes conforme treino e meta energetica.",
+            }
+        ],
         "diary": {"date": "2026-07-10", "meal_type": "Lanche da tarde", "quantity": "1", "grams": "450", "notes": "Vitamina de banana, leite e aveia antes do treino. Aderencia: 90%"},
         "plan": {
-            "title": "Ganho de massa magra - Bruno Martins Demo",
+            "title": "Ganho de massa magra - Lucas Ferreira QA",
             "target_kcal": "2950", "target_protein_g": "165", "target_carbs_g": "390", "target_fat_g": "82",
             "notes": "Distribuir proteina nas seis refeicoes e ajustar carboidrato ao treino das 18h.",
             "meals": [
@@ -142,11 +173,11 @@ DEMO_PATIENTS: list[dict[str, Any]] = [
     },
     {
         "patient": {
-            "full_name": "Carla Nunes Demo",
+            "full_name": "Renata Alves QA",
             "birth_date": "1983-08-21",
             "gender": "Feminino",
-            "email": "carla.nunes.demo@example.com",
-            "phone": "(31) 90000-0303",
+            "email": "renata.alves.qa@example.com",
+            "phone": "(31) 98883-0303",
             "status": "active",
             "notes": "Paciente sintetica. Perfil vegetariano com controle glicemico.",
         },
@@ -170,9 +201,24 @@ DEMO_PATIENTS: list[dict[str, Any]] = [
             {"date": "2026-07-08", "body_fat_percent": "34.2", "fat_mass_kg": "24.4", "lean_mass_kg": "46.8", "muscle_mass_kg": "24.1", "total_body_water_l": "34.1", "basal_metabolic_rate_kcal": "1335", "visceral_fat_level": "8", "metabolic_age": 47, "notes": "Reducao gradual de gordura corporal."},
         ],
         "goals": [{"focus": "Controle glicemico", "metric": "Aderencia alimentar", "unit": "%", "direction": "increase", "baseline_value": "50", "current_value": "76", "target_value": "85", "status": "Em progresso", "notes": "Evitar bebidas acucaradas e distribuir carboidratos."}],
+        "recipes": [
+            {
+                "title": "Ensopado vegetariano da Renata",
+                "description": "Lentilha, tofu, abobrinha, cenoura, tomate e temperos naturais.",
+                "preparation_method": "Refogar os vegetais, juntar a lentilha cozida e finalizar com o tofu grelhado.",
+                "prep_time_minutes": 18,
+                "cook_time_minutes": 30,
+                "servings": 4,
+                "raw_weight_g": "1200",
+                "cooked_weight_g": "1450",
+                "yield_weight_g": "1450",
+                "tags": ["vegetariana", "controle glicemico", "tbca"],
+                "professional_notes": "Manter vegetais variados e ajustar a porcao de lentilha individualmente.",
+            }
+        ],
         "diary": {"date": "2026-07-09", "meal_type": "Jantar", "quantity": "1", "grams": "380", "notes": "Lentilha, tofu e legumes salteados. Aderencia: 86%"},
         "plan": {
-            "title": "Vegetariano com controle glicemico - Carla Nunes Demo",
+            "title": "Vegetariano com controle glicemico - Renata Alves QA",
             "target_kcal": "1650", "target_protein_g": "92", "target_carbs_g": "185", "target_fat_g": "60",
             "notes": "Plano ovolactovegetariano com carboidratos distribuidos, fibras e fontes proteicas em todas as refeicoes.",
             "meals": [
@@ -212,6 +258,15 @@ def seed_demo_patients() -> list[tuple[int, str, str]]:
 
             anamnesis.create_or_replace(patient.id, AnamnesisCreate(**profile["anamnesis"]))
             goals.replace_for_patient(patient.id, [PatientGoalCreate(**item) for item in profile["goals"]])
+
+            existing_recipes = recipes.list_by_patient(patient.id)
+            for item in profile["recipes"]:
+                recipe_data = RecipeCreate(**item)
+                matching_recipe = next((recipe for recipe in existing_recipes if recipe.title == recipe_data.title), None)
+                if matching_recipe:
+                    recipes.update(matching_recipe, RecipeUpdate(**recipe_data.model_dump()))
+                else:
+                    recipes.create(patient.id, recipe_data)
 
             physical_data = PhysicalAssessmentCreate(**profile["assessment"])
             existing_assessments = assessment_repository.list_physical(patient.id)

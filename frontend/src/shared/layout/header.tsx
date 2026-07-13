@@ -15,7 +15,6 @@ const routeTitles: Record<string, string> = {
   "/bioimpedance": "Bioimpedancia",
   "/recipes": "Receitas",
   "/meal-plans": "Plano alimentar",
-  "/substitutions": "Substituicoes",
   "/diary": "Diario alimentar",
   "/reports": "Relatorios",
   "/etl": "ETL alimentar",
@@ -29,7 +28,6 @@ const routeSearchPlaceholders: Record<string, string> = {
   "/bioimpedance": "Buscar registro de bioimpedancia",
   "/recipes": "Buscar receita vinculada ao paciente",
   "/meal-plans": "Buscar refeicao ou item do plano",
-  "/substitutions": "Buscar substituicao alimentar",
   "/diary": "Buscar registro do diario",
   "/reports": "Buscar relatorio ou paciente",
   "/etl": "Buscar importacao ou dados",
@@ -84,7 +82,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-background/95 backdrop-blur">
-      <div className="flex min-h-[72px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="flex min-h-[64px] items-center justify-between gap-2 px-3 sm:min-h-[72px] sm:gap-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <button
             className="grid h-10 w-10 place-items-center rounded-smart border border-line bg-surface text-graphite transition duration-200 hover:border-sage hover:text-forest lg:hidden"
@@ -96,7 +94,7 @@ export function Header() {
           </button>
           <div className="min-w-0">
             <p className="truncate text-[13px] font-medium text-forest">Clinica SmartDiet</p>
-            <h1 className="truncate text-[22px] font-semibold leading-7 text-graphite">{title}</h1>
+            <h1 className="truncate text-[18px] font-semibold leading-6 text-graphite sm:text-[22px] sm:leading-7">{title}</h1>
           </div>
         </div>
 
@@ -125,7 +123,7 @@ export function Header() {
               <Bell className="h-4 w-4" aria-hidden="true" />
             </button>
             {notificationsOpen ? (
-              <div className="absolute right-0 top-12 w-[320px] rounded-smart border border-line bg-surface p-4 text-left shadow-smart">
+              <div className="absolute right-0 top-12 w-[min(320px,calc(100vw-1.5rem))] rounded-smart border border-line bg-surface p-4 text-left shadow-smart">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[14px] font-semibold text-graphite">Notificacoes</p>
@@ -165,7 +163,7 @@ export function Header() {
               <Settings className="h-4 w-4" aria-hidden="true" />
             </button>
             {settingsOpen ? (
-              <div className="absolute right-0 top-12 w-[320px] rounded-smart border border-line bg-surface p-4 text-left shadow-smart">
+              <div className="absolute right-0 top-12 w-[min(320px,calc(100vw-1.5rem))] rounded-smart border border-line bg-surface p-4 text-left shadow-smart">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[14px] font-semibold text-graphite">Configuracoes</p>

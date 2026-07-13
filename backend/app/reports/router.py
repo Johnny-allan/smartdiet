@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.assessment.repository import AssessmentRepository
-from app.clinical.repository import AnamnesisRepository
+from app.clinical.repository import AnamnesisRepository, PatientGoalRepository
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError
 from app.diary.repository import DiaryRepository
 from app.patients.repository import PatientRepository
 from app.plans.repository import MealPlanRepository
+from app.recipes.repository import RecipeRepository
 from app.reports.schemas import PatientReportSummary
 from app.shared.responses import ApiResponse
 
@@ -23,7 +24,7 @@ def patient_report_summary(patient_id: int, db: Session = Depends(get_db)) -> Ap
     return ApiResponse(
         data=PatientReportSummary(
             patient_id=patient_id,
-            sections=["summary", "anamnesis", "assessments", "bioimpedance", "meal_plan", "diary"],
+            sections=["summary", "anamnesis", "goals", "assessments", "bioimpedance", "meal_plan", "recipes", "diary"],
             export_pdf_available=True,
         )
     )
@@ -39,6 +40,8 @@ SECTION_TITLES = {
     "Bioimpedancia",
     "Plano alimentar",
     "Diario alimentar",
+    "Focos e metas",
+    "Receitas vinculadas",
     "Dados do paciente",
     "Objetivo",
     "Restricoes e preferencias",
@@ -172,6 +175,8 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
     diary_entries = DiaryRepository(db).list_by_patient(patient_id)
     assessments = assessment_repo.list_physical(patient_id)
     bioimpedances = assessment_repo.list_bioimpedance(patient_id)
+    goals = PatientGoalRepository(db).list_by_patient(patient_id)
+    recipes = RecipeRepository(db).list_by_patient(patient_id)
 
     lines = [
         "SmartDiet - Relatorio clinico do paciente",
@@ -194,6 +199,15 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
         if anamnesis.physical_activity:
             anamnesis_lines.extend(["Atividade fisica:", *_wrap_optional(anamnesis.physical_activity)])
     _add_section(lines, "Anamnese", anamnesis_lines)
+
+    _add_section(
+        lines,
+        "Focos e metas",
+        [
+            f"{item.focus} | {item.metric}: atual {item.current_value or '-'} {item.unit or ''} | meta {item.target_value or '-'} {item.unit or ''} | {item.status}"
+            for item in goals
+        ],
+    )
 
     _add_section(
         lines,
@@ -225,6 +239,15 @@ def _patient_report_lines(patient_id: int, db: Session) -> list[str]:
             for item in meal.items:
                 meal_plan_lines.extend(_wrap_optional(f"- {item.grams} g | {item.notes or 'Item sem descricao'}"))
     _add_section(lines, "Plano alimentar", meal_plan_lines)
+
+    _add_section(
+        lines,
+        "Receitas vinculadas",
+        [
+            f"{item.title} | {item.servings} porcao(oes) | {item.description or 'Sem descricao'}"
+            for item in recipes
+        ],
+    )
 
     _add_section(
         lines,

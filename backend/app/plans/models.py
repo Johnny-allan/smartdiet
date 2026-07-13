@@ -15,7 +15,7 @@ class MealPlan(Base, TimestampMixin):
     __table_args__ = {"schema": "plans"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id"), nullable=False, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id", ondelete="CASCADE"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
@@ -36,7 +36,7 @@ class MealPlanMeal(Base):
     __table_args__ = {"schema": "plans"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.meal_plans.id"), nullable=False, index=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.meal_plans.id", ondelete="CASCADE"), nullable=False, index=True)
     meal_type: Mapped[str] = mapped_column(String(80), nullable=False)
     time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -53,7 +53,7 @@ class MealPlanItem(Base):
     __table_args__ = {"schema": "plans"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    meal_id: Mapped[int] = mapped_column(ForeignKey("plans.meal_plan_meals.id"), nullable=False, index=True)
+    meal_id: Mapped[int] = mapped_column(ForeignKey("plans.meal_plan_meals.id", ondelete="CASCADE"), nullable=False, index=True)
     food_id: Mapped[Optional[int]] = mapped_column(ForeignKey("foods.foods.id"), nullable=True)
     recipe_id: Mapped[Optional[int]] = mapped_column(ForeignKey("recipes.recipes.id"), nullable=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)

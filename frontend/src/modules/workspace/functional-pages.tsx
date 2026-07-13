@@ -58,6 +58,7 @@ type BackendPatient = {
 
 type BackendRecipe = {
   id: number;
+  patient_id: number;
   title: string;
   description?: string | null;
   preparation_method?: string | null;
@@ -624,7 +625,7 @@ function mealPlanFromApi(plan: BackendMealPlan): MealPlan {
 function recipeFromApi(recipe: BackendRecipe): Recipe {
   return {
     id: String(recipe.id),
-    patientId: "api",
+    patientId: String(recipe.patient_id),
     title: recipe.title,
     servings: String(recipe.servings),
     ingredients: recipe.description ?? recipe.preparation_method ?? "",
@@ -1434,6 +1435,7 @@ export function PatientsWorkspace() {
   const [selectedId, setSelectedId] = useState("");
   const selected = store.patients.find((patient) => patient.id === selectedId) ?? store.patients[0];
   const [saveMessage, setSaveMessage] = useState("");
+  const [recordStatus, setRecordStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const emptyPatientForm = {
     name: "",
     birthDate: "",
@@ -1458,6 +1460,12 @@ export function PatientsWorkspace() {
     notes: "",
   });
   const selectedGoals = store.focusGoals.filter((goal) => goal.patientId === selected?.id);
+  const selectedAnamnesis = store.anamnesis.find((item) => item.patientId === selected?.id);
+  const selectedAssessments = store.assessments.filter((item) => item.patientId === selected?.id);
+  const selectedBioimpedance = store.bioimpedance.filter((item) => item.patientId === selected?.id);
+  const selectedPlans = store.mealPlans.filter((item) => item.patientId === selected?.id);
+  const selectedDiary = store.diary.filter((item) => item.patientId === selected?.id);
+  const selectedRecipes = store.recipes.filter((item) => item.patientId === selected?.id);
 
   useEffect(() => {
     if (store.patients.length > 0 && !store.patients.some((patient) => patient.id === selectedId)) {
@@ -1466,24 +1474,52 @@ export function PatientsWorkspace() {
   }, [selectedId, store.patients]);
 
   useEffect(() => {
-    async function loadGoals() {
+    async function loadPatientRecord() {
       if (!hasBackendId(selectedId)) return;
+      setRecordStatus("loading");
       try {
-        const goals = requireApiData(await apiGet<BackendPatientGoal[]>(`/patients/${selectedId}/goals`));
+        const [goals, assessments, bioimpedance, plans, diary, recipes] = await Promise.all([
+          apiGet<BackendPatientGoal[]>(`/patients/${selectedId}/goals`).then(requireApiData),
+          apiGet<BackendAssessment[]>(`/patients/${selectedId}/assessments`).then(requireApiData),
+          apiGet<BackendBioimpedance[]>(`/patients/${selectedId}/bioimpedance`).then(requireApiData),
+          apiGet<BackendMealPlan[]>(`/patients/${selectedId}/meal-plans`).then(requireApiData),
+          apiGet<BackendDiaryEntry[]>(`/patients/${selectedId}/diary`).then(requireApiData),
+          apiGet<BackendRecipe[]>(`/patients/${selectedId}/recipes`).then(requireApiData),
+        ]);
+        let anamnesis: Anamnesis | null = null;
+        try {
+          anamnesis = anamnesisFromApi(
+            selectedId,
+            requireApiData(await apiGet<BackendAnamnesis>(`/patients/${selectedId}/anamnesis`)),
+          );
+        } catch {
+          anamnesis = null;
+        }
         setStore((current) => ({
           ...current,
-          focusGoals: [
-            ...goals.map(goalFromApi),
-            ...current.focusGoals.filter((goal) => goal.patientId !== selectedId),
-          ],
+          focusGoals: [...goals.map(goalFromApi), ...current.focusGoals.filter((item) => item.patientId !== selectedId)],
+          assessments: [...assessments.map(assessmentFromApi), ...current.assessments.filter((item) => item.patientId !== selectedId)],
+          bioimpedance: [...bioimpedance.map(bioimpedanceFromApi), ...current.bioimpedance.filter((item) => item.patientId !== selectedId)],
+          mealPlans: [...plans.map(mealPlanFromApi), ...current.mealPlans.filter((item) => item.patientId !== selectedId)],
+          diary: [...diary.map(diaryFromApi), ...current.diary.filter((item) => item.patientId !== selectedId)],
+          recipes: [...recipes.map(recipeFromApi), ...current.recipes.filter((item) => item.patientId !== selectedId)],
+          anamnesis: anamnesis
+            ? [anamnesis, ...current.anamnesis.filter((item) => item.patientId !== selectedId)]
+            : current.anamnesis.filter((item) => item.patientId !== selectedId),
         }));
+        setRecordStatus("ready");
       } catch {
-        setSaveMessage("Metas locais exibidas. Nao foi possivel carregar metas do backend agora.");
+        setRecordStatus("error");
       }
     }
 
-    void loadGoals();
+    void loadPatientRecord();
   }, [selectedId, setStore]);
+
+  function openPatientPdf(kind: "clinical-summary" | "meal-plan") {
+    if (!selected || !hasBackendId(selected.id)) return;
+    window.open(apiUrl(`/patients/${selected.id}/reports/${kind}.pdf`), "_blank", "noopener,noreferrer");
+  }
 
   function clearPatientForm() {
     setForm(emptyPatientForm);
@@ -1763,6 +1799,67 @@ export function PatientsWorkspace() {
                   </div>
                 </div>
 
+                <div className="rounded-smart border border-line bg-background p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-[14px] font-semibold text-graphite">Ficha clinica completa</p>
+                      <p className="mt-1 text-[12px] leading-5 text-graphite/65">
+                        Todos os registros abaixo pertencem exclusivamente a {selected.name}.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {hasBackendId(selected.id) ? (
+                        <>
+                          <button className={secondaryButtonClass} type="button" onClick={() => openPatientPdf("clinical-summary")}>
+                            <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Relatorio clinico PDF
+                          </button>
+                          {selectedPlans.length > 0 ? (
+                            <button className={secondaryButtonClass} type="button" onClick={() => openPatientPdf("meal-plan")}>
+                              <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                              Plano alimentar PDF
+                            </button>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                  {recordStatus === "loading" ? <StateBanner tone="loading" title="Carregando ficha" detail="Buscando os dados persistidos deste paciente." /> : null}
+                  {recordStatus === "error" ? <StateBanner tone="error" title="Ficha indisponivel" detail="Nao foi possivel sincronizar todos os dados deste paciente agora." /> : null}
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <article className="rounded-smart border border-line bg-surface p-3">
+                      <p className="text-[12px] font-semibold text-forest">Anamnese</p>
+                      <p className="mt-2 text-[13px] leading-5 text-graphite">{selectedAnamnesis?.mainGoal || "Nao cadastrada"}</p>
+                      <p className="mt-1 text-[12px] leading-5 text-graphite/65">{selectedAnamnesis?.restrictions || "Sem restricoes registradas."}</p>
+                    </article>
+                    <article className="rounded-smart border border-line bg-surface p-3">
+                      <p className="text-[12px] font-semibold text-forest">Avaliacoes</p>
+                      <p className="mt-2 text-[13px] text-graphite">{selectedAssessments.length} registro(s)</p>
+                      <p className="mt-1 text-[12px] text-graphite/65">{selectedAssessments[0] ? `${selectedAssessments[0].date} - ${selectedAssessments[0].weight} kg` : "Nenhuma avaliacao."}</p>
+                    </article>
+                    <article className="rounded-smart border border-line bg-surface p-3">
+                      <p className="text-[12px] font-semibold text-forest">Bioimpedancia</p>
+                      <p className="mt-2 text-[13px] text-graphite">{selectedBioimpedance.length} registro(s)</p>
+                      <p className="mt-1 text-[12px] text-graphite/65">{selectedBioimpedance[0] ? `${selectedBioimpedance[0].date} - gordura ${selectedBioimpedance[0].bodyFat || "-"}%` : "Nenhuma bioimpedancia."}</p>
+                    </article>
+                    <article className="rounded-smart border border-line bg-surface p-3">
+                      <p className="text-[12px] font-semibold text-forest">Plano alimentar</p>
+                      <p className="mt-2 text-[13px] text-graphite">{selectedPlans.length} plano(s)</p>
+                      <p className="mt-1 text-[12px] text-graphite/65">{selectedPlans[0] ? `${Object.values(selectedPlans[0].meals).filter(Boolean).length} refeicoes preenchidas` : "Nenhum plano."}</p>
+                    </article>
+                    <article className="rounded-smart border border-line bg-surface p-3">
+                      <p className="text-[12px] font-semibold text-forest">Diario alimentar</p>
+                      <p className="mt-2 text-[13px] text-graphite">{selectedDiary.length} registro(s)</p>
+                      <p className="mt-1 text-[12px] text-graphite/65">{selectedDiary[0] ? `${selectedDiary[0].date} - ${selectedDiary[0].meal}` : "Nenhum registro."}</p>
+                    </article>
+                    <article className="rounded-smart border border-line bg-surface p-3">
+                      <p className="text-[12px] font-semibold text-forest">Receitas e metas</p>
+                      <p className="mt-2 text-[13px] text-graphite">{selectedRecipes.length} receita(s) | {selectedGoals.length} meta(s)</p>
+                      <p className="mt-1 text-[12px] text-graphite/65">{selectedRecipes[0]?.title || selectedGoals[0]?.focus || "Nenhum registro."}</p>
+                    </article>
+                  </div>
+                </div>
+
                 <div className="rounded-smart border border-terracotta/30 bg-terracotta/5 p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
@@ -1957,17 +2054,24 @@ export function RecipesWorkspace() {
   const [form, setForm] = useState(emptyRecipeForm);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
-  const recipes = store.recipes.filter((recipe) => recipe.patientId === patientId || recipe.patientId === "api");
+  const recipes = store.recipes.filter((recipe) => recipe.patientId === patientId);
+
+  useEffect(() => {
+    if (store.patients.length > 0 && !store.patients.some((patient) => patient.id === patientId)) {
+      setPatientId(store.patients[0].id);
+    }
+  }, [patientId, store.patients]);
 
   useEffect(() => {
     async function loadRecipes() {
+      if (!hasBackendId(patientId)) return;
       try {
-        const recipesFromApi = requireApiData(await apiGet<BackendRecipe[]>("/recipes"));
+        const recipesFromApi = requireApiData(await apiGet<BackendRecipe[]>(`/patients/${patientId}/recipes`));
         setStore((current) => ({
           ...current,
           recipes: [
             ...recipesFromApi.map(recipeFromApi),
-            ...current.recipes.filter((recipe) => recipe.patientId !== "api"),
+            ...current.recipes.filter((recipe) => recipe.patientId !== patientId),
           ],
         }));
       } catch {
@@ -1976,7 +2080,7 @@ export function RecipesWorkspace() {
     }
 
     void loadRecipes();
-  }, [setStore]);
+  }, [patientId, setStore]);
 
   function recipePayload() {
     return {
@@ -1999,7 +2103,7 @@ export function RecipesWorkspace() {
 
   function startEditingRecipe(recipe: Recipe) {
     setEditingRecipeId(recipe.id);
-    if (recipe.patientId !== "api") setPatientId(recipe.patientId);
+    setPatientId(recipe.patientId);
     setForm({
       title: recipe.title,
       servings: recipe.servings,
@@ -2017,12 +2121,12 @@ export function RecipesWorkspace() {
     if (editingRecipeId) {
       let recipe: Recipe = {
         id: editingRecipeId,
-        patientId: hasBackendId(editingRecipeId) ? "api" : patientId,
+        patientId,
         ...form,
       };
-      if (hasBackendId(editingRecipeId)) {
+      if (hasBackendId(patientId) && hasBackendId(editingRecipeId)) {
         try {
-          const updated = requireApiData(await apiPut<BackendRecipe>(`/recipes/${editingRecipeId}`, recipePayload()));
+          const updated = requireApiData(await apiPut<BackendRecipe>(`/patients/${patientId}/recipes/${editingRecipeId}`, recipePayload()));
           recipe = recipeFromApi(updated);
           setStatusMessage("Receita atualizada na API real.");
         } catch {
@@ -2040,12 +2144,16 @@ export function RecipesWorkspace() {
     }
 
     let recipe: Recipe = { id: createId("recipe"), patientId, ...form };
-    try {
-      const created = requireApiData(await apiPost<BackendRecipe>("/recipes", recipePayload()));
-      recipe = recipeFromApi(created);
-      setStatusMessage("Receita salva na API real.");
-    } catch {
-      setStatusMessage("API indisponivel: receita salva apenas no workspace local.");
+    if (hasBackendId(patientId)) {
+      try {
+        const created = requireApiData(await apiPost<BackendRecipe>(`/patients/${patientId}/recipes`, recipePayload()));
+        recipe = recipeFromApi(created);
+        setStatusMessage("Receita salva na API real.");
+      } catch {
+        setStatusMessage("API indisponivel: receita salva apenas no workspace local.");
+      }
+    } else {
+      setStatusMessage("Receita salva no cadastro local deste paciente.");
     }
 
     setStore((current) => ({ ...current, recipes: [recipe, ...current.recipes] }));
@@ -2053,9 +2161,9 @@ export function RecipesWorkspace() {
   }
 
   async function deleteRecipe(recipe: Recipe) {
-    if (hasBackendId(recipe.id)) {
+    if (hasBackendId(recipe.patientId) && hasBackendId(recipe.id)) {
       try {
-        await apiDelete(`/recipes/${recipe.id}`);
+        await apiDelete(`/patients/${recipe.patientId}/recipes/${recipe.id}`);
         setStatusMessage("Receita removida da API real.");
       } catch {
         setStatusMessage("API indisponivel: receita removida apenas do workspace local.");
@@ -4345,6 +4453,7 @@ export function ReportsWorkspace() {
   const selectedPlan = store.mealPlans.find((item) => item.patientId === selectedPatient?.id);
   const selectedAnamnesis = store.anamnesis.find((item) => item.patientId === selectedPatient?.id);
   const selectedGoals = store.focusGoals.filter((item) => item.patientId === selectedPatient?.id);
+  const selectedRecipes = store.recipes.filter((item) => item.patientId === selectedPatient?.id);
   const latestAssessment = selectedAssessments[0];
   const latestBioimpedance = selectedBioimpedance[0];
   const latestDiary = selectedDiary[0];
@@ -4374,6 +4483,7 @@ export function ReportsWorkspace() {
     { label: "Plano alimentar", ready: Boolean(selectedPlan), detail: selectedPlan ? "Cardapio preenchido" : "Sem plano salvo." },
     { label: "Diario", ready: selectedDiary.length > 0, detail: `${selectedDiary.length} registro(s)` },
     { label: "Metas", ready: selectedGoals.length > 0, detail: `${selectedGoals.length} meta(s)` },
+    { label: "Receitas", ready: selectedRecipes.length > 0, detail: `${selectedRecipes.length} receita(s)` },
   ];
 
   useEffect(() => {
@@ -4386,12 +4496,13 @@ export function ReportsWorkspace() {
     async function loadReportWorkspaceData() {
       if (!hasBackendId(patientId)) return;
       try {
-        const [plans, assessments, bioimpedance, diary, goals] = await Promise.all([
+        const [plans, assessments, bioimpedance, diary, goals, recipes] = await Promise.all([
           apiGet<BackendMealPlan[]>(`/patients/${patientId}/meal-plans`).then(requireApiData),
           apiGet<BackendAssessment[]>(`/patients/${patientId}/assessments`).then(requireApiData),
           apiGet<BackendBioimpedance[]>(`/patients/${patientId}/bioimpedance`).then(requireApiData),
           apiGet<BackendDiaryEntry[]>(`/patients/${patientId}/diary`).then(requireApiData),
           apiGet<BackendPatientGoal[]>(`/patients/${patientId}/goals`).then(requireApiData),
+          apiGet<BackendRecipe[]>(`/patients/${patientId}/recipes`).then(requireApiData),
         ]);
         let anamnesis: Anamnesis | null = null;
         try {
@@ -4421,9 +4532,13 @@ export function ReportsWorkspace() {
             ...goals.map(goalFromApi),
             ...current.focusGoals.filter((item) => item.patientId !== patientId),
           ],
+          recipes: [
+            ...recipes.map(recipeFromApi),
+            ...current.recipes.filter((item) => item.patientId !== patientId),
+          ],
           anamnesis: anamnesis
             ? [anamnesis, ...current.anamnesis.filter((item) => item.patientId !== patientId)]
-            : current.anamnesis,
+            : current.anamnesis.filter((item) => item.patientId !== patientId),
         }));
       } catch {
         setSummaryStatus("error");
@@ -4466,6 +4581,7 @@ export function ReportsWorkspace() {
       setSummaryStatus("local");
       return;
     }
+    if (!selectedPlan) return;
     window.open(apiUrl(`/patients/${patientId}/reports/meal-plan.pdf`), "_blank", "noopener,noreferrer");
   }
 
@@ -4556,6 +4672,14 @@ export function ReportsWorkspace() {
           selectedGoals.length
             ? `<ul>${selectedGoals.map((goal) => `<li><strong>${escapeHtml(goal.focus)}</strong>: ${escapeHtml(goal.current || "-")} de ${escapeHtml(goal.target || "-")} ${escapeHtml(goal.unit || "")} (${escapeHtml(goal.status)}). ${escapeHtml(goal.notes || "")}</li>`).join("")}</ul>`
             : "<p>Nenhuma meta registrada.</p>"
+        }
+      </section>
+      <section>
+        <h2>Receitas vinculadas</h2>
+        ${
+          selectedRecipes.length
+            ? selectedRecipes.map((recipe) => `<article><h3>${escapeHtml(recipe.title)}</h3><p>${escapeHtml(recipe.ingredients || "Sem descricao.")}</p><p><strong>Porcoes:</strong> ${escapeHtml(recipe.servings)} | <strong>Tags:</strong> ${escapeHtml(recipe.tags || "-")}</p></article>`).join("")
+            : "<p>Nenhuma receita vinculada.</p>"
         }
       </section>
       <section>
@@ -4705,8 +4829,10 @@ export function ReportsWorkspace() {
     const link = document.createElement("a");
     link.href = url;
     link.download = `${kind === "clinical" ? "relatorio-clinico" : "plano-alimentar-paciente"}-${normalizeQuery(selectedPatient?.name ?? "paciente").replace(/\s+/g, "-")}.html`;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   return (
@@ -4762,7 +4888,12 @@ export function ReportsWorkspace() {
               </button>
             </div>
             <div className="flex flex-col gap-2">
-              <button className={primaryButtonClass} type="button" onClick={reportTab === "clinical" ? openClinicalPdf : openMealPlanPdfFromReports}>
+              <button
+                className={`${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                type="button"
+                disabled={reportTab === "meal" && !selectedPlan}
+                onClick={reportTab === "clinical" ? openClinicalPdf : openMealPlanPdfFromReports}
+              >
                 <Download className="mr-2 h-4 w-4" aria-hidden="true" />
                 {reportTab === "clinical" ? "Baixar relatorio clinico PDF" : "Baixar cardapio PDF"}
               </button>

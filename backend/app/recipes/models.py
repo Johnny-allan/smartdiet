@@ -12,6 +12,9 @@ class Recipe(Base, UUIDMixin, TimestampMixin):
     __table_args__ = {"schema": "recipes"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("patients.patients.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     title: Mapped[str] = mapped_column(String(180), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     preparation_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -31,7 +34,7 @@ class RecipeItem(Base):
     __table_args__ = {"schema": "recipes"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    recipe_id: Mapped[int] = mapped_column(ForeignKey("recipes.recipes.id"), nullable=False, index=True)
+    recipe_id: Mapped[int] = mapped_column(ForeignKey("recipes.recipes.id", ondelete="CASCADE"), nullable=False, index=True)
     food_id: Mapped[int] = mapped_column(ForeignKey("foods.foods.id"), nullable=False, index=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     unit: Mapped[str] = mapped_column(String(40), nullable=False)

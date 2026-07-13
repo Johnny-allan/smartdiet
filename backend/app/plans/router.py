@@ -6,13 +6,14 @@ from app.patients.repository import PatientRepository
 from app.plans.repository import MealPlanRepository
 from app.plans.schemas import MealPlanCreate, MealPlanRead
 from app.plans.service import MealPlanService
+from app.recipes.repository import RecipeRepository
 from app.shared.responses import ApiResponse
 
 router = APIRouter(tags=["meal-plans"])
 
 
 def get_meal_plan_service(db: Session = Depends(get_db)) -> MealPlanService:
-    return MealPlanService(MealPlanRepository(db), PatientRepository(db))
+    return MealPlanService(MealPlanRepository(db), PatientRepository(db), RecipeRepository(db))
 
 
 @router.get("/patients/{patient_id}/meal-plans", response_model=ApiResponse[list[MealPlanRead]])

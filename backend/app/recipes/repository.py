@@ -12,15 +12,21 @@ class RecipeRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def list(self) -> list[Recipe]:
-        return list(self.db.scalars(select(Recipe).order_by(Recipe.title)))
+    def list_by_patient(self, patient_id: int) -> list[Recipe]:
+        return list(
+            self.db.scalars(
+                select(Recipe)
+                .where(Recipe.patient_id == patient_id)
+                .order_by(Recipe.title)
+            )
+        )
 
     def get(self, recipe_id: int) -> Recipe | None:
         return self.db.get(Recipe, recipe_id)
 
-    def create(self, data: RecipeCreate) -> Recipe:
+    def create(self, patient_id: int, data: RecipeCreate) -> Recipe:
         recipe_data = data.model_dump(exclude={"items"})
-        recipe = Recipe(**recipe_data)
+        recipe = Recipe(patient_id=patient_id, **recipe_data)
         self.db.add(recipe)
         self.db.flush()
         for item in data.items:

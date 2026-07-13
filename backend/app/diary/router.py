@@ -6,13 +6,14 @@ from app.diary.repository import DiaryRepository
 from app.diary.schemas import FoodDiaryEntryCreate, FoodDiaryEntryRead, FoodDiaryEntryUpdate
 from app.diary.service import DiaryService
 from app.patients.repository import PatientRepository
+from app.recipes.repository import RecipeRepository
 from app.shared.responses import ApiResponse
 
 router = APIRouter(prefix="/patients/{patient_id}/diary", tags=["diary"])
 
 
 def get_diary_service(db: Session = Depends(get_db)) -> DiaryService:
-    return DiaryService(DiaryRepository(db), PatientRepository(db))
+    return DiaryService(DiaryRepository(db), PatientRepository(db), RecipeRepository(db))
 
 
 @router.get("", response_model=ApiResponse[list[FoodDiaryEntryRead]])

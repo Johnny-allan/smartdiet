@@ -57,12 +57,17 @@ TACO 4a edicao, TBCA e futuras tabelas importadas para o catalogo local.
 - `POST /api/v1/nutrition/clinical-alerts`
 
 ## Receitas
-- `GET /api/v1/recipes`
-- `POST /api/v1/recipes`
-- `GET /api/v1/recipes/{recipe_id}`
-- `PUT /api/v1/recipes/{recipe_id}`
-- `DELETE /api/v1/recipes/{recipe_id}`
-- `POST /api/v1/recipes/{recipe_id}/calculate`
+- `GET /api/v1/patients/{patient_id}/recipes`
+- `POST /api/v1/patients/{patient_id}/recipes`
+- `GET /api/v1/patients/{patient_id}/recipes/{recipe_id}`
+- `PUT /api/v1/patients/{patient_id}/recipes/{recipe_id}`
+- `DELETE /api/v1/patients/{patient_id}/recipes/{recipe_id}`
+- `POST /api/v1/patients/{patient_id}/recipes/{recipe_id}/calculate`
+
+Receitas pertencem a um unico paciente. As rotas de leitura e alteracao validam
+o vinculo para impedir acesso cruzado entre fichas.
+Planos alimentares e registros de diario tambem rejeitam `recipe_id` de outro
+paciente.
 
 ## Plano alimentar
 - `GET /api/v1/patients/{patient_id}/meal-plans`

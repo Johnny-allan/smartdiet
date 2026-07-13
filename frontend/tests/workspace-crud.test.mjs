@@ -16,7 +16,7 @@ test("workspace exposes edit and delete actions for beta clinical modules", () =
   }
 
   for (const route of [
-    "/recipes/${recipe.id}",
+    "/patients/${recipe.patientId}/recipes/${recipe.id}",
     "/patients/${patientId}/assessments/${item.id}",
     "/patients/${patientId}/bioimpedance/${item.id}",
     "/patients/${patientId}/diary/${item.id}",
@@ -36,6 +36,10 @@ test("reports workspace exposes PDF and polished state actions", () => {
   assert.match(workspaceSource, /StateBanner/);
   assert.match(workspaceSource, /EmptyState/);
   assert.match(apiClientSource, /export function apiUrl/);
+  assert.match(workspaceSource, /Ficha clinica completa/);
+  assert.match(workspaceSource, /Receitas vinculadas/);
+  assert.match(workspaceSource, /document\.body\.appendChild\(link\)/);
+  assert.match(workspaceSource, /disabled=\{reportTab === "meal" && !selectedPlan\}/);
 });
 
 test("navigation removes unused AI route and patients expose goal charts", () => {

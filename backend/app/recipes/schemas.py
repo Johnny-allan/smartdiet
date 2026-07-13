@@ -43,6 +43,7 @@ class RecipeRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    patient_id: int
     uuid: UUID
     title: str
     description: str | None = None

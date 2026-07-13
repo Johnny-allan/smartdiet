@@ -13,7 +13,7 @@ class PhysicalAssessment(Base, TimestampMixin):
     __table_args__ = {"schema": "assessment"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id"), nullable=False, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id", ondelete="CASCADE"), nullable=False, index=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     weight_kg: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
     height_cm: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
@@ -32,7 +32,7 @@ class Bioimpedance(Base, TimestampMixin):
     __table_args__ = {"schema": "assessment"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id"), nullable=False, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id", ondelete="CASCADE"), nullable=False, index=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     body_fat_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
     fat_mass_kg: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)

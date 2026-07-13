@@ -15,7 +15,7 @@ class FoodDiaryEntry(Base):
     __table_args__ = {"schema": "diary"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id"), nullable=False, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id", ondelete="CASCADE"), nullable=False, index=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     meal_type: Mapped[str] = mapped_column(String(80), nullable=False)
     food_id: Mapped[Optional[int]] = mapped_column(ForeignKey("foods.foods.id"), nullable=True)

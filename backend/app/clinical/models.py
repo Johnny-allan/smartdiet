@@ -11,7 +11,7 @@ class Anamnesis(Base, TimestampMixin):
     __table_args__ = {"schema": "clinical"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id"), nullable=False, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id", ondelete="CASCADE"), nullable=False, index=True)
     main_goal: Mapped[Optional[str]] = mapped_column(String(240), nullable=True)
     clinical_history: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     family_history: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -40,7 +40,7 @@ class PatientGoal(Base, TimestampMixin):
     __table_args__ = {"schema": "clinical"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id"), nullable=False, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.patients.id", ondelete="CASCADE"), nullable=False, index=True)
     focus: Mapped[str] = mapped_column(String(160), nullable=False)
     metric: Mapped[str] = mapped_column(String(120), nullable=False)
     metric_type: Mapped[str] = mapped_column(String(80), nullable=False, default="number")

@@ -135,6 +135,7 @@ Campos principais:
 
 ### recipes.recipes
 - id
+- patient_id
 - uuid
 - title
 - description

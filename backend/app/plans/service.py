@@ -3,13 +3,20 @@ from app.patients.repository import PatientRepository
 from app.plans.models import MealPlan
 from app.plans.repository import MealPlanRepository
 from app.plans.schemas import MealPlanCreate, REQUIRED_MEALS
+from app.recipes.repository import RecipeRepository
 from app.shared.nutrition import normalize_text
 
 
 class MealPlanService:
-    def __init__(self, repository: MealPlanRepository, patients: PatientRepository) -> None:
+    def __init__(
+        self,
+        repository: MealPlanRepository,
+        patients: PatientRepository,
+        recipes: RecipeRepository,
+    ) -> None:
         self.repository = repository
         self.patients = patients
+        self.recipes = recipes
 
     def _ensure_patient(self, patient_id: int) -> None:
         if self.patients.get(patient_id) is None:
@@ -32,4 +39,11 @@ class MealPlanService:
         missing = sorted(required - meal_names)
         if missing:
             raise BusinessRuleError(f"Meal plan must include required meals: {', '.join(missing)}")
+        for meal in data.meals:
+            for item in meal.items:
+                if item.recipe_id is None:
+                    continue
+                recipe = self.recipes.get(item.recipe_id)
+                if recipe is None or recipe.patient_id != patient_id:
+                    raise BusinessRuleError("Recipe must belong to the meal plan patient")
         return self.repository.create(patient_id, data)

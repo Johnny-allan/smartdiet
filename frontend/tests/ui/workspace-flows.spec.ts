@@ -57,7 +57,6 @@ test("assessment diary and bioimpedance pages expose CRUD actions", async ({ pag
 
   await page.goto("/bioimpedance");
   await page.getByLabel("Gordura %").fill("25");
-  await page.getByLabel("Massa muscular kg").fill("30");
   await page.getByLabel("Agua corporal L").fill("40");
   await page.getByRole("button", { name: "Salvar bioimpedancia" }).click();
   await expect(page.getByText(/gordura 25%/)).toBeVisible();

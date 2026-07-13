@@ -18,9 +18,11 @@ def test_clinical_report_pdf_builder_accepts_professional_sections() -> None:
             "SmartDiet - Relatorio clinico do paciente",
             "Paciente: Marina Costa",
             "Anamnese",
+            "Focos e metas",
             "Avaliacoes fisicas",
             "Bioimpedancia",
             "Plano alimentar",
+            "Receitas vinculadas",
             "Diario alimentar",
         ]
     )
@@ -28,4 +30,5 @@ def test_clinical_report_pdf_builder_accepts_professional_sections() -> None:
     assert pdf.startswith(b"%PDF-1.4")
     assert b"Relatorio clinico" in pdf
     assert b"Documento de apoio profissional" in pdf
+    assert b"Receitas vinculadas" in pdf
     assert b"/Count 1" in pdf

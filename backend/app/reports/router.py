@@ -287,7 +287,6 @@ def patient_meal_plan_pdf(patient_id: int, db: Session = Depends(get_db)) -> Res
         lines.append(f"Gordura corporal: {latest_bioimpedance.body_fat_percent or '-'}%")
         lines.append(f"Massa gorda: {latest_bioimpedance.fat_mass_kg or '-'} kg")
         lines.append(f"Massa magra: {latest_bioimpedance.lean_mass_kg or '-'} kg")
-        lines.append(f"Massa muscular: {latest_bioimpedance.muscle_mass_kg or '-'} kg")
         lines.append(f"Agua corporal: {latest_bioimpedance.total_body_water_l or '-'} L")
         lines.append(f"Gordura visceral: {latest_bioimpedance.visceral_fat_level or '-'}")
         lines.append(f"TMB: {latest_bioimpedance.basal_metabolic_rate_kcal or '-'} kcal")

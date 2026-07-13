@@ -177,8 +177,15 @@ type Assessment = {
   weight: string;
   height: string;
   bmi: string;
+  skinfolds?: SkinfoldMeasurements;
+  skinfoldSum?: string;
+  bodyFatPercent?: string;
   notes: string;
 };
+
+type SkinfoldKey = "chest" | "midaxillary" | "triceps" | "subscapular" | "abdominal" | "suprailiac" | "thigh";
+
+type SkinfoldMeasurements = Record<SkinfoldKey, string>;
 
 type MealPlan = {
   patientId: string;
@@ -221,7 +228,7 @@ type Bioimpedance = {
   bodyFat: string;
   fatMass?: string;
   leanMass?: string;
-  muscleMass: string;
+  muscleMass?: string;
   water: string;
   visceralFat?: string;
   metabolicAge?: string;
@@ -344,6 +351,29 @@ const defaultMealTimes: Record<string, string> = {
 
 const brazilianSourceNames = ["TACO", "TACO 4a edicao", "TBCA"];
 
+const emptySkinfolds: SkinfoldMeasurements = {
+  chest: "",
+  midaxillary: "",
+  triceps: "",
+  subscapular: "",
+  abdominal: "",
+  suprailiac: "",
+  thigh: "",
+};
+
+const skinfoldFields: Array<{ key: SkinfoldKey; label: string }> = [
+  { key: "chest", label: "Peitoral mm" },
+  { key: "midaxillary", label: "Axilar media mm" },
+  { key: "triceps", label: "Tricipital mm" },
+  { key: "subscapular", label: "Subescapular mm" },
+  { key: "abdominal", label: "Abdominal mm" },
+  { key: "suprailiac", label: "Suprailiaca mm" },
+  { key: "thigh", label: "Coxa mm" },
+];
+
+const skinfoldMarkerStart = "[DOBRAS_7]";
+const skinfoldMarkerEnd = "[/DOBRAS_7]";
+
 function formatNutrient(value: number | string | null | undefined, suffix = "") {
   if (value === null || value === undefined || value === "") return "-";
   const numberValue = typeof value === "number" ? value : Number(value);
@@ -445,6 +475,47 @@ function goalToObjective(goal: string) {
 
 function genderToSex(gender: string) {
   return normalizeQuery(gender).startsWith("masc") ? "male" : "female";
+}
+
+function parseAssessmentNotes(notes: string | null | undefined) {
+  const value = notes ?? "";
+  const markerPattern = /\[DOBRAS_7\](.*?)\[\/DOBRAS_7\]/s;
+  const match = value.match(markerPattern);
+  if (!match) return { cleanNotes: value, skinfolds: undefined as SkinfoldMeasurements | undefined };
+
+  try {
+    const parsed = JSON.parse(match[1]) as Partial<SkinfoldMeasurements>;
+    return {
+      cleanNotes: value.replace(markerPattern, "").trim(),
+      skinfolds: { ...emptySkinfolds, ...parsed },
+    };
+  } catch {
+    return { cleanNotes: value.replace(markerPattern, "").trim(), skinfolds: undefined };
+  }
+}
+
+function buildAssessmentNotes(notes: string, skinfolds: SkinfoldMeasurements) {
+  const hasSkinfold = Object.values(skinfolds).some((value) => value.trim() !== "");
+  if (!hasSkinfold) return notes || null;
+  return [notes, `${skinfoldMarkerStart}${JSON.stringify(skinfolds)}${skinfoldMarkerEnd}`].filter(Boolean).join("\n");
+}
+
+function calculateSkinfoldMetrics(skinfolds: SkinfoldMeasurements, patient?: Patient) {
+  const values = skinfoldFields.map((field) => Number(skinfolds[field.key].replace(",", ".")));
+  if (values.some((value) => !Number.isFinite(value) || value <= 0)) {
+    return { sum: "", bodyFatPercent: "" };
+  }
+  const sum = values.reduce((total, value) => total + value, 0);
+  const age = ageFromBirthDate(patient?.birthDate ?? "");
+  const isMale = normalizeQuery(patient?.gender ?? "").startsWith("masc");
+  const density = isMale
+    ? 1.112 - 0.00043499 * sum + 0.00000055 * sum * sum - 0.00028826 * age
+    : 1.097 - 0.00046971 * sum + 0.00000056 * sum * sum - 0.00012828 * age;
+  const bodyFatPercent = 495 / density - 450;
+  return {
+    sum: sum.toFixed(1),
+    bodyFatPercent: Number.isFinite(bodyFatPercent) ? bodyFatPercent.toFixed(1) : "",
+  };
 }
 
 function patientFromApi(patient: BackendPatient): Patient {
@@ -564,6 +635,8 @@ function recipeFromApi(recipe: BackendRecipe): Recipe {
 }
 
 function assessmentFromApi(item: BackendAssessment): Assessment {
+  const parsedNotes = parseAssessmentNotes(item.notes);
+  const metrics = parsedNotes.skinfolds ? calculateSkinfoldMetrics(parsedNotes.skinfolds) : { sum: "", bodyFatPercent: "" };
   return {
     id: String(item.id),
     patientId: String(item.patient_id),
@@ -571,7 +644,10 @@ function assessmentFromApi(item: BackendAssessment): Assessment {
     weight: item.weight_kg,
     height: item.height_cm,
     bmi: item.bmi,
-    notes: item.notes ?? "",
+    skinfolds: parsedNotes.skinfolds,
+    skinfoldSum: metrics.sum,
+    bodyFatPercent: metrics.bodyFatPercent,
+    notes: parsedNotes.cleanNotes,
   };
 }
 
@@ -600,6 +676,16 @@ function diaryFromApi(item: BackendDiaryEntry): DiaryEntry {
     meal: item.meal_type,
     description: item.notes ?? `${item.grams} g registrados`,
     adherence: "Registrado",
+  };
+}
+
+function anamnesisFromApi(patientId: string, item: BackendAnamnesis): Anamnesis {
+  return {
+    patientId,
+    mainGoal: item.main_goal ?? "",
+    restrictions: [item.food_restrictions, item.allergies, item.intolerances].filter(Boolean).join("\n"),
+    routine: item.physical_activity ?? "",
+    clinicalNotes: [item.clinical_history, item.diseases, item.medications, item.food_preferences].filter(Boolean).join("\n"),
   };
 }
 
@@ -2119,6 +2205,12 @@ export function MealPlansWorkspace() {
   }, [prescriptionFoods, productQuery]);
 
   useEffect(() => {
+    if (store.patients.length > 0 && !store.patients.some((patient) => patient.id === patientId)) {
+      setPatientId(store.patients[0].id);
+    }
+  }, [patientId, store.patients]);
+
+  useEffect(() => {
     const plan = store.mealPlans.find((item) => item.patientId === patientId);
     const base = Object.fromEntries(requiredMeals.map((meal) => [meal, ""]));
     setMeals({ ...base, ...(plan?.meals ?? {}) });
@@ -2683,10 +2775,11 @@ export function MealPlansWorkspace() {
 export function AssessmentsWorkspace() {
   const { store, setStore } = useSmartDietStore();
   const [patientId, setPatientId] = useState(store.patients[0]?.id ?? "");
-  const emptyAssessmentForm = { date: "2026-07-07", weight: "", height: "", notes: "" };
+  const emptyAssessmentForm = { date: "2026-07-07", weight: "", height: "", skinfolds: emptySkinfolds, notes: "" };
   const [form, setForm] = useState(emptyAssessmentForm);
   const [editingAssessmentId, setEditingAssessmentId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
+  const selectedPatient = store.patients.find((patient) => patient.id === patientId);
   const patientAssessments = store.assessments.filter((item) => item.patientId === patientId);
   const bmi = useMemo(() => {
     const weight = Number(form.weight);
@@ -2694,6 +2787,16 @@ export function AssessmentsWorkspace() {
     if (!weight || !heightM) return "";
     return (weight / (heightM * heightM)).toFixed(2);
   }, [form.weight, form.height]);
+  const skinfoldMetrics = useMemo(
+    () => calculateSkinfoldMetrics(form.skinfolds, selectedPatient),
+    [form.skinfolds, selectedPatient],
+  );
+
+  useEffect(() => {
+    if (store.patients.length > 0 && !store.patients.some((patient) => patient.id === patientId)) {
+      setPatientId(store.patients[0].id);
+    }
+  }, [patientId, store.patients]);
 
   useEffect(() => {
     async function loadAssessments() {
@@ -2720,7 +2823,7 @@ export function AssessmentsWorkspace() {
       date: form.date,
       weight_kg: form.weight,
       height_cm: form.height,
-      notes: form.notes || null,
+      notes: buildAssessmentNotes(form.notes, form.skinfolds),
     };
   }
 
@@ -2732,14 +2835,14 @@ export function AssessmentsWorkspace() {
   function startEditingAssessment(item: Assessment) {
     setEditingAssessmentId(item.id);
     setPatientId(item.patientId);
-    setForm({ date: item.date, weight: item.weight, height: item.height, notes: item.notes });
+    setForm({ date: item.date, weight: item.weight, height: item.height, skinfolds: item.skinfolds ?? emptySkinfolds, notes: item.notes });
     setStatusMessage("");
   }
 
   async function saveAssessment() {
     if (!patientId || !form.weight || !form.height) return;
     if (editingAssessmentId) {
-      let assessment: Assessment = { id: editingAssessmentId, patientId, ...form, bmi };
+      let assessment: Assessment = { id: editingAssessmentId, patientId, ...form, bmi, skinfoldSum: skinfoldMetrics.sum, bodyFatPercent: skinfoldMetrics.bodyFatPercent };
       if (hasBackendId(patientId) && hasBackendId(editingAssessmentId)) {
         try {
           const updated = requireApiData(
@@ -2761,7 +2864,7 @@ export function AssessmentsWorkspace() {
       return;
     }
 
-    let assessment: Assessment = { id: createId("assessment"), patientId, ...form, bmi };
+    let assessment: Assessment = { id: createId("assessment"), patientId, ...form, bmi, skinfoldSum: skinfoldMetrics.sum, bodyFatPercent: skinfoldMetrics.bodyFatPercent };
     if (hasBackendId(patientId)) {
       try {
         const created = requireApiData(await apiPost<BackendAssessment>(`/patients/${patientId}/assessments`, assessmentPayload()));
@@ -2792,7 +2895,7 @@ export function AssessmentsWorkspace() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Activity} title="Avaliacoes" subtitle="Registro funcional com calculo de IMC instantaneo e historico por paciente." />
+      <PageHeader icon={Activity} title="Avaliacoes" subtitle="Avaliacao antropometrica com 7 dobras, percentual de gordura estimado e IMC secundario." />
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <SmartCard className="p-5">
           <div className="flex items-center justify-between gap-3">
@@ -2810,7 +2913,32 @@ export function AssessmentsWorkspace() {
             <div className="grid gap-3 md:grid-cols-3">
               <label className={labelClass}>Peso kg<input className={inputClass} value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></label>
               <label className={labelClass}>Altura cm<input className={inputClass} value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} /></label>
-              <label className={labelClass}>IMC<input className={inputClass} value={bmi} readOnly /></label>
+              <label className={labelClass}>IMC secundario<input className={inputClass} value={bmi} readOnly /></label>
+            </div>
+            <div className="rounded-smart border border-line bg-background p-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-[13px] font-semibold text-graphite">Protocolo de 7 dobras</p>
+                  <p className="mt-1 text-[12px] leading-5 text-graphite/65">Use medidas em milimetros para estimar composicao corporal com mais clareza que o IMC isolado.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <NutritionBadge label="Soma" value={skinfoldMetrics.sum ? `${skinfoldMetrics.sum} mm` : "-"} />
+                  <NutritionBadge label="Gordura" value={skinfoldMetrics.bodyFatPercent ? `${skinfoldMetrics.bodyFatPercent}%` : "-"} />
+                </div>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {skinfoldFields.map((field) => (
+                  <label className={labelClass} key={field.key}>
+                    {field.label}
+                    <input
+                      className={inputClass}
+                      inputMode="decimal"
+                      value={form.skinfolds[field.key]}
+                      onChange={(e) => setForm({ ...form, skinfolds: { ...form.skinfolds, [field.key]: e.target.value } })}
+                    />
+                  </label>
+                ))}
+              </div>
             </div>
             <label className={labelClass}>Observacoes<textarea className={textareaClass} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
             <button className={primaryButtonClass} type="button" onClick={saveAssessment}>
@@ -2822,8 +2950,8 @@ export function AssessmentsWorkspace() {
         <HistoryCard
           title="Historico"
           items={patientAssessments.map((item) => ({
-            title: `${item.date} - IMC ${item.bmi}`,
-            detail: `${item.weight} kg, ${item.height} cm. ${item.notes}`,
+            title: `${item.date} - gordura ${item.bodyFatPercent || "-"}%`,
+            detail: `7 dobras ${item.skinfoldSum || "-"} mm | peso ${item.weight} kg | altura ${item.height} cm | IMC ${item.bmi}. ${item.notes}`,
             actions: (
               <>
                 <button className={secondaryButtonClass} type="button" onClick={() => startEditingAssessment(item)}>
@@ -3814,7 +3942,6 @@ export function BioimpedanceWorkspace() {
     bodyFat: "",
     fatMass: "",
     leanMass: "",
-    muscleMass: "",
     water: "",
     visceralFat: "",
     metabolicAge: "",
@@ -3827,6 +3954,12 @@ export function BioimpedanceWorkspace() {
   const [editingBioimpedanceId, setEditingBioimpedanceId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const items = store.bioimpedance.filter((item) => item.patientId === patientId);
+
+  useEffect(() => {
+    if (store.patients.length > 0 && !store.patients.some((patient) => patient.id === patientId)) {
+      setPatientId(store.patients[0].id);
+    }
+  }, [patientId, store.patients]);
 
   useEffect(() => {
     async function loadBioimpedance() {
@@ -3854,7 +3987,7 @@ export function BioimpedanceWorkspace() {
       body_fat_percent: form.bodyFat || null,
       fat_mass_kg: form.fatMass || null,
       lean_mass_kg: form.leanMass || null,
-      muscle_mass_kg: form.muscleMass || null,
+      muscle_mass_kg: null,
       total_body_water_l: form.water || null,
       basal_metabolic_rate_kcal: form.bmr || null,
       visceral_fat_level: form.visceralFat || null,
@@ -3884,7 +4017,6 @@ export function BioimpedanceWorkspace() {
       bodyFat: item.bodyFat,
       fatMass: item.fatMass ?? "",
       leanMass: item.leanMass ?? "",
-      muscleMass: item.muscleMass,
       water: item.water,
       visceralFat: item.visceralFat ?? "",
       metabolicAge: item.metabolicAge ?? "",
@@ -3976,7 +4108,6 @@ export function BioimpedanceWorkspace() {
               <label className={labelClass}>Gordura %<input className={inputClass} value={form.bodyFat} onChange={(e) => setForm({ ...form, bodyFat: e.target.value })} /></label>
               <label className={labelClass}>Massa gorda kg<input className={inputClass} value={form.fatMass} onChange={(e) => setForm({ ...form, fatMass: e.target.value })} /></label>
               <label className={labelClass}>Massa magra kg<input className={inputClass} value={form.leanMass} onChange={(e) => setForm({ ...form, leanMass: e.target.value })} /></label>
-              <label className={labelClass}>Massa muscular kg<input className={inputClass} value={form.muscleMass} onChange={(e) => setForm({ ...form, muscleMass: e.target.value })} /></label>
               <label className={labelClass}>Agua corporal L<input className={inputClass} value={form.water} onChange={(e) => setForm({ ...form, water: e.target.value })} /></label>
               <label className={labelClass}>Gordura visceral<input className={inputClass} value={form.visceralFat} onChange={(e) => setForm({ ...form, visceralFat: e.target.value })} /></label>
               <label className={labelClass}>Idade metabolica<input className={inputClass} value={form.metabolicAge} onChange={(e) => setForm({ ...form, metabolicAge: e.target.value })} /></label>
@@ -3995,7 +4126,7 @@ export function BioimpedanceWorkspace() {
           title="Historico"
           items={items.map((item) => ({
             title: `${item.date} - gordura ${item.bodyFat || "-"}%`,
-            detail: `${item.device || "Equipamento nao informado"} | Massa magra ${item.leanMass || "-"} kg, muscular ${item.muscleMass || "-"} kg, visceral ${item.visceralFat || "-"}, fase ${item.phaseAngle || "-"}, TMB ${item.bmr || "-"} kcal. ${item.notes || ""}`,
+            detail: `${item.device || "Equipamento nao informado"} | Massa magra ${item.leanMass || "-"} kg, visceral ${item.visceralFat || "-"}, fase ${item.phaseAngle || "-"}, TMB ${item.bmr || "-"} kcal. ${item.notes || ""}`,
             actions: (
               <>
                 <button className={secondaryButtonClass} type="button" onClick={() => startEditingBioimpedance(item)}>
@@ -4202,7 +4333,7 @@ export function SubstitutionsWorkspace() {
 }
 
 export function ReportsWorkspace() {
-  const { ready, store } = useSmartDietStore();
+  const { ready, store, setStore } = useSmartDietStore();
   const [patientId, setPatientId] = useState(store.patients[0]?.id ?? "");
   const [reportTab, setReportTab] = useState<"clinical" | "meal">("clinical");
   const [summaryStatus, setSummaryStatus] = useState<"idle" | "loading" | "ready" | "local" | "error">("idle");
@@ -4214,7 +4345,6 @@ export function ReportsWorkspace() {
   const selectedPlan = store.mealPlans.find((item) => item.patientId === selectedPatient?.id);
   const selectedAnamnesis = store.anamnesis.find((item) => item.patientId === selectedPatient?.id);
   const selectedGoals = store.focusGoals.filter((item) => item.patientId === selectedPatient?.id);
-  const selectedRecipes = store.recipes.filter((item) => item.patientId === selectedPatient?.id);
   const latestAssessment = selectedAssessments[0];
   const latestBioimpedance = selectedBioimpedance[0];
   const latestDiary = selectedDiary[0];
@@ -4251,6 +4381,57 @@ export function ReportsWorkspace() {
       setPatientId(store.patients[0].id);
     }
   }, [patientId, store.patients]);
+
+  useEffect(() => {
+    async function loadReportWorkspaceData() {
+      if (!hasBackendId(patientId)) return;
+      try {
+        const [plans, assessments, bioimpedance, diary, goals] = await Promise.all([
+          apiGet<BackendMealPlan[]>(`/patients/${patientId}/meal-plans`).then(requireApiData),
+          apiGet<BackendAssessment[]>(`/patients/${patientId}/assessments`).then(requireApiData),
+          apiGet<BackendBioimpedance[]>(`/patients/${patientId}/bioimpedance`).then(requireApiData),
+          apiGet<BackendDiaryEntry[]>(`/patients/${patientId}/diary`).then(requireApiData),
+          apiGet<BackendPatientGoal[]>(`/patients/${patientId}/goals`).then(requireApiData),
+        ]);
+        let anamnesis: Anamnesis | null = null;
+        try {
+          anamnesis = anamnesisFromApi(patientId, requireApiData(await apiGet<BackendAnamnesis>(`/patients/${patientId}/anamnesis`)));
+        } catch {
+          anamnesis = null;
+        }
+        setStore((current) => ({
+          ...current,
+          mealPlans: [
+            ...plans.slice(0, 1).map(mealPlanFromApi),
+            ...current.mealPlans.filter((item) => item.patientId !== patientId),
+          ],
+          assessments: [
+            ...assessments.map(assessmentFromApi),
+            ...current.assessments.filter((item) => item.patientId !== patientId),
+          ],
+          bioimpedance: [
+            ...bioimpedance.map(bioimpedanceFromApi),
+            ...current.bioimpedance.filter((item) => item.patientId !== patientId),
+          ],
+          diary: [
+            ...diary.map(diaryFromApi),
+            ...current.diary.filter((item) => item.patientId !== patientId),
+          ],
+          focusGoals: [
+            ...goals.map(goalFromApi),
+            ...current.focusGoals.filter((item) => item.patientId !== patientId),
+          ],
+          anamnesis: anamnesis
+            ? [anamnesis, ...current.anamnesis.filter((item) => item.patientId !== patientId)]
+            : current.anamnesis,
+        }));
+      } catch {
+        setSummaryStatus("error");
+      }
+    }
+
+    void loadReportWorkspaceData();
+  }, [patientId, setStore]);
 
   useEffect(() => {
     async function loadSummary() {
@@ -4296,6 +4477,13 @@ export function ReportsWorkspace() {
       .replace(/"/g, "&quot;");
   }
 
+  function mealTextLines(meal: string) {
+    return (selectedPlan?.meals?.[meal] ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
   function localClinicalReportHtml() {
     const rows = [
       ["Nome", selectedPatient?.name],
@@ -4308,7 +4496,9 @@ export function ReportsWorkspace() {
       ["Observacoes do cadastro", selectedPatient?.notes || "Sem observacoes."],
       ["Peso", latestAssessment?.weight ? `${latestAssessment.weight} kg` : "Nao registrado"],
       ["Altura", latestAssessment?.height ? `${latestAssessment.height} cm` : "Nao registrado"],
-      ["IMC", latestAssessment?.bmi || "Nao registrado"],
+      ["Soma 7 dobras", latestAssessment?.skinfoldSum ? `${latestAssessment.skinfoldSum} mm` : "Nao registrado"],
+      ["Gordura estimada por dobras", latestAssessment?.bodyFatPercent ? `${latestAssessment.bodyFatPercent}%` : "Nao registrado"],
+      ["IMC secundario", latestAssessment?.bmi || "Nao registrado"],
       ["Gordura corporal", latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "Nao registrado"],
       ["Massa magra", latestBioimpedance?.leanMass ? `${latestBioimpedance.leanMass} kg` : "Nao registrado"],
       ["TMB", latestBioimpedance?.bmr ? `${latestBioimpedance.bmr} kcal` : "Nao registrado"],
@@ -4324,7 +4514,7 @@ export function ReportsWorkspace() {
         <h2>Historico de avaliacoes</h2>
         ${
           selectedAssessments.length
-            ? `<table>${selectedAssessments.map((item) => `<tr><th>${escapeHtml(item.date)}</th><td>${escapeHtml(`Peso ${item.weight} kg | Altura ${item.height} cm | IMC ${item.bmi}`)}<br />${escapeHtml(item.notes || "Sem observacoes.")}</td></tr>`).join("")}</table>`
+            ? `<table>${selectedAssessments.map((item) => `<tr><th>${escapeHtml(item.date)}</th><td>${escapeHtml(`7 dobras ${item.skinfoldSum || "-"} mm | gordura ${item.bodyFatPercent || "-"}% | peso ${item.weight} kg | altura ${item.height} cm | IMC ${item.bmi}`)}<br />${escapeHtml(item.notes || "Sem observacoes.")}</td></tr>`).join("")}</table>`
             : "<p>Nenhuma avaliacao registrada.</p>"
         }
       </section>
@@ -4340,7 +4530,6 @@ export function ReportsWorkspace() {
                   <tr><th>Gordura corporal</th><td>${escapeHtml(item.bodyFat ? `${item.bodyFat}%` : "Nao registrado")}</td></tr>
                   <tr><th>Massa gorda</th><td>${escapeHtml(item.fatMass ? `${item.fatMass} kg` : "Nao registrado")}</td></tr>
                   <tr><th>Massa magra</th><td>${escapeHtml(item.leanMass ? `${item.leanMass} kg` : "Nao registrado")}</td></tr>
-                  <tr><th>Massa muscular</th><td>${escapeHtml(item.muscleMass ? `${item.muscleMass} kg` : "Nao registrado")}</td></tr>
                   <tr><th>Agua corporal</th><td>${escapeHtml(item.water ? `${item.water} L` : "Nao registrado")}</td></tr>
                   <tr><th>Gordura visceral</th><td>${escapeHtml(item.visceralFat || "Nao registrado")}</td></tr>
                   <tr><th>Idade metabolica</th><td>${escapeHtml(item.metabolicAge || "Nao registrado")}</td></tr>
@@ -4409,7 +4598,6 @@ export function ReportsWorkspace() {
       ["Gordura corporal", latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "Nao registrado"],
       ["Massa gorda", latestBioimpedance?.fatMass ? `${latestBioimpedance.fatMass} kg` : "Nao registrado"],
       ["Massa magra", latestBioimpedance?.leanMass ? `${latestBioimpedance.leanMass} kg` : "Nao registrado"],
-      ["Massa muscular", latestBioimpedance?.muscleMass ? `${latestBioimpedance.muscleMass} kg` : "Nao registrado"],
       ["Agua corporal", latestBioimpedance?.water ? `${latestBioimpedance.water} L` : "Nao registrado"],
       ["Gordura visceral", latestBioimpedance?.visceralFat || "Nao registrado"],
       ["TMB", latestBioimpedance?.bmr ? `${latestBioimpedance.bmr} kcal` : "Nao registrado"],
@@ -4440,7 +4628,11 @@ export function ReportsWorkspace() {
           return `
             <article>
               <h3>${escapeHtml(meal)} <span>${escapeHtml(selectedPlan?.mealTimes?.[meal] || defaultMealTimes[meal] || "")}</span></h3>
-              <p>${escapeHtml(selectedPlan?.meals?.[meal] || "Sem orientacao textual.")}</p>
+              ${
+                mealTextLines(meal).length
+                  ? `<ul>${mealTextLines(meal).map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`
+                  : "<p>Sem orientacao textual.</p>"
+              }
               <p><strong>Kcal estruturadas:</strong> ${escapeHtml(kcal ? formatNutrient(kcal, " kcal") : "-")}</p>
               ${
                 items.length
@@ -4462,25 +4654,11 @@ export function ReportsWorkspace() {
             : "<p>Nenhum diario alimentar registrado.</p>"
         }
       </section>
-      ${
-        selectedRecipes.length
-          ? `<section>
-              <h2>Preparos de apoio</h2>
-              ${selectedRecipes.map((recipe) => `
-              <article>
-                <h3>${escapeHtml(recipe.title)} <span>${escapeHtml(`${recipe.servings} porcao(oes)`)}</span></h3>
-                <p>${escapeHtml(recipe.ingredients)}</p>
-                <p><strong>Kcal:</strong> ${escapeHtml(recipe.kcal || "-")} | <strong>Proteina:</strong> ${escapeHtml(recipe.protein || "-")} g | <strong>Tags:</strong> ${escapeHtml(recipe.tags || "-")}</p>
-              </article>
-            `).join("")}
-            </section>`
-          : ""
-      }
     `;
   }
 
   function localReportDocument(kind: "clinical" | "meal") {
-    const title = kind === "clinical" ? "Relatorio clinico" : "Resumo alimentar";
+    const title = kind === "clinical" ? "Relatorio clinico" : "Versao para paciente";
     const body = kind === "clinical" ? localClinicalReportHtml() : localMealReportHtml();
     return `<!doctype html>
       <html lang="pt-BR">
@@ -4526,18 +4704,18 @@ export function ReportsWorkspace() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${kind === "clinical" ? "relatorio-clinico" : "resumo-alimentar"}-${normalizeQuery(selectedPatient?.name ?? "paciente").replace(/\s+/g, "-")}.html`;
+    link.download = `${kind === "clinical" ? "relatorio-clinico" : "plano-alimentar-paciente"}-${normalizeQuery(selectedPatient?.name ?? "paciente").replace(/\s+/g, "-")}.html`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Database} title="Relatorios" subtitle="Relatorio clinico, resumo fisico e plano alimentar estruturado para impressao ou envio ao paciente." />
+      <PageHeader icon={Database} title="Relatorios" subtitle="Relatorio clinico e versao para paciente com plano alimentar completo." />
       {!ready ? <StateBanner tone="loading" title="Carregando workspace" detail="Sincronizando dados locais antes de montar os relatorios." /> : null}
       <section className="grid gap-4 md:grid-cols-4">
         <SmartCard className="p-5"><p className="text-[13px] text-graphite/65">Pacientes</p><p className="mt-2 text-[28px] font-semibold">{store.patients.length}</p></SmartCard>
-        <SmartCard className="p-5"><p className="text-[13px] text-graphite/65">Receitas</p><p className="mt-2 text-[28px] font-semibold">{store.recipes.length}</p></SmartCard>
+        <SmartCard className="p-5"><p className="text-[13px] text-graphite/65">Planos</p><p className="mt-2 text-[28px] font-semibold">{store.mealPlans.length}</p></SmartCard>
         <SmartCard className="p-5"><p className="text-[13px] text-graphite/65">Avaliacoes</p><p className="mt-2 text-[28px] font-semibold">{store.assessments.length}</p></SmartCard>
         <SmartCard className="p-5"><p className="text-[13px] text-graphite/65">Diarios</p><p className="mt-2 text-[28px] font-semibold">{store.diary.length}</p></SmartCard>
       </section>
@@ -4590,11 +4768,11 @@ export function ReportsWorkspace() {
               </button>
               <button className={secondaryButtonClass} type="button" onClick={() => downloadLocalReport(reportTab)}>
                 <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
-                Baixar versao para impressao
+                Baixar versao para paciente
               </button>
               <button className={secondaryButtonClass} type="button" onClick={() => printLocalReport(reportTab)}>
                 <Printer className="mr-2 h-4 w-4" aria-hidden="true" />
-                Imprimir versao para impressao
+                Imprimir versao para paciente
               </button>
             </div>
           </div>
@@ -4663,12 +4841,12 @@ export function ReportsWorkspace() {
                     <p className="text-[13px] font-semibold text-graphite">Relatorio clinico e resumo fisico</p>
                     <p className="mt-1 text-[12px] leading-5 text-graphite/65">Conteudo voltado para avaliacao, bioimpedancia, anamnese e metas acompanhadas.</p>
                   </div>
-                  <NutritionBadge label="IMC" value={latestAssessment?.bmi || "-"} />
+                  <NutritionBadge label="7 dobras" value={latestAssessment?.skinfoldSum ? `${latestAssessment.skinfoldSum} mm` : "-"} />
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   <NutritionBadge label="Peso" value={latestAssessment?.weight ? `${latestAssessment.weight} kg` : "-"} />
-                  <NutritionBadge label="Altura" value={latestAssessment?.height ? `${latestAssessment.height} cm` : "-"} />
-                  <NutritionBadge label="Gordura" value={latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "-"} />
+                  <NutritionBadge label="Gordura dobras" value={latestAssessment?.bodyFatPercent ? `${latestAssessment.bodyFatPercent}%` : "-"} />
+                  <NutritionBadge label="Gordura bio" value={latestBioimpedance?.bodyFat ? `${latestBioimpedance.bodyFat}%` : "-"} />
                 </div>
               </div>
             ) : (

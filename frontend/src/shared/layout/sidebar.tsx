@@ -4,8 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
-  Apple,
-  BookOpen,
   ClipboardList,
   Database,
   Gauge,
@@ -25,8 +23,6 @@ const navItems = [
   { label: "Anamnese", href: "/anamnesis", icon: NotebookTabs },
   { label: "Avaliacoes", href: "/assessments", icon: Activity },
   { label: "Bioimpedancia", href: "/bioimpedance", icon: Scale },
-  { label: "Alimentos", href: "/foods", icon: Apple },
-  { label: "Receitas", href: "/recipes", icon: BookOpen },
   { label: "Plano alimentar", href: "/meal-plans", icon: Salad },
   { label: "Diario", href: "/diary", icon: ClipboardList },
   { label: "Relatorios", href: "/reports", icon: ScrollText },
